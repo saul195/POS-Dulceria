@@ -1,8 +1,11 @@
 const path = require('path');
+const os = require('os');
 const express = require('express');
 const db = require('./db');
+const wa = require('./whatsapp');
 
 const app = express();
+const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
@@ -102,11 +105,11 @@ app.post('/api/products/import', (req, res) => {
   const getCat = db.prepare('SELECT id FROM categories WHERE name = ?');
   const getProd = db.prepare('SELECT id FROM products WHERE barcode = ?');
   const insert = db.prepare(
-    `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const update = db.prepare(
-    `UPDATE products SET name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?
+    `UPDATE products SET name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, is_active = ?
      WHERE id = ?`
   );
 
@@ -128,8 +131,8 @@ app.post('/api/products/import', (req, res) => {
         Number(r.min_stock) || 0,
         String(r.unit || 'pza'),
       ];
-      if (existing) { update.run(...params, existing.id); updated++; }
-      else { insert.run(barcode, ...params); inserted++; }
+      if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), existing.id); updated++; }
+      else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0)); inserted++; }
     }
     return { inserted, updated, skipped };
   })(data);
@@ -143,6 +146,14 @@ app.get('/api/products/barcode/:barcode', (req, res) => {
   res.json(p);
 });
 
+app.get('/api/products/check-barcode', (req, res) => {
+  const code = String(req.query.code || '').trim();
+  const excludeId = Number(req.query.excludeId) || 0;
+  if (!code) return res.status(400).json({ error: 'Falta el código' });
+  const exists = !!db.prepare('SELECT id FROM products WHERE barcode = ? AND id != ?').get(code, excludeId);
+  res.json({ code, available: !exists });
+});
+
 app.get('/api/products/:id', (req, res) => {
   const p = db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
@@ -152,11 +163,10 @@ app.get('/api/products/:id', (req, res) => {
 app.post('/api/products', (req, res) => {
   const b = req.body || {};
   if (!String(b.name || '').trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
-  if (!b.barcode && !b.selling_price) { /* se permite sin barcode? mejor exigir */ }
   try {
     const info = db.prepare(
-      `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       String(b.barcode || '').trim() || `GEN-${Date.now()}`,
       String(b.name).trim(),
@@ -165,7 +175,8 @@ app.post('/api/products', (req, res) => {
       round2(Number(b.selling_price) || 0),
       Number(b.stock) || 0,
       Number(b.min_stock) || 0,
-      String(b.unit || 'pza')
+      String(b.unit || 'pza'),
+      b.is_active === undefined ? 1 : (b.is_active ? 1 : 0)
     );
     res.status(201).json(db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).get(info.lastInsertRowid));
   } catch (e) {
@@ -180,7 +191,7 @@ app.put('/api/products/:id', (req, res) => {
   const b = req.body || {};
   try {
     db.prepare(
-      `UPDATE products SET barcode = ?, name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?
+      `UPDATE products SET barcode = ?, name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, is_active = ?
        WHERE id = ?`
     ).run(
       String(b.barcode ?? p.barcode).trim(),
@@ -191,6 +202,7 @@ app.put('/api/products/:id', (req, res) => {
       Number(b.stock ?? p.stock),
       Number(b.min_stock ?? p.min_stock),
       String(b.unit ?? p.unit),
+      b.is_active === undefined ? p.is_active : (b.is_active ? 1 : 0),
       p.id
     );
     res.json(db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).get(p.id));
@@ -204,6 +216,11 @@ app.delete('/api/products/:id', (req, res) => {
   const info = db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
   if (!info.changes) return res.status(404).json({ error: 'Producto no encontrado' });
   res.json({ ok: true });
+});
+
+app.post('/api/products/delete-all', (req, res) => {
+  const deleted = db.prepare('DELETE FROM products').run().changes;
+  res.json({ ok: true, deleted });
 });
 
 /* ============================ VENTAS ============================ */
@@ -380,6 +397,55 @@ app.post('/api/cash/close', (req, res) => {
   res.json(db.prepare('SELECT * FROM cash_sessions WHERE id = ?').get(session.id));
 });
 
+/* ============================ WHATSAPP ============================ */
+
+const WA_PASSWORD = 'gress19505';
+
+app.post('/api/whatsapp/login', (req, res) => {
+  const { password } = req.body || {};
+  if (String(password) === WA_PASSWORD) return res.json({ ok: true });
+  res.status(401).json({ error: 'Contraseña incorrecta' });
+});
+
+app.get('/api/whatsapp/status', (req, res) => {
+  const s = wa.getSettings();
+  res.json({ ...wa.getStatus(), ...s });
+});
+
+app.put('/api/whatsapp/config', (req, res) => {
+  const b = req.body || {};
+  if (b.number !== undefined) wa.setNumber(b.number);
+  if (b.enabled !== undefined) wa.setEnabled(!!b.enabled);
+  res.json(wa.getSettings());
+});
+
+app.post('/api/whatsapp/test', async (req, res) => {
+  try {
+    const r = await wa.sendTestNow();
+    res.json({ ok: true, message: r.message });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/whatsapp/lowstock', async (req, res) => {
+  try {
+    const r = await wa.sendLowStockNow();
+    res.json({ ok: true, message: r.message });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/whatsapp/reset-session', async (req, res) => {
+  try {
+    const s = await wa.resetSession();
+    res.json({ ok: true, status: s.status });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /* ============================ ERRORES ============================ */
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
@@ -389,6 +455,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Error interno del servidor' });
 });
 
-app.listen(PORT, () => {
-  console.log(`POS Dulcería corriendo en http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  const urls = [`http://localhost:${PORT}`];
+  for (const nets of Object.values(os.networkInterfaces())) {
+    for (const net of nets || []) {
+      if (net.family === 'IPv4' && !net.internal) urls.push(`http://${net.address}:${PORT}`);
+    }
+  }
+  console.log('POS Dulcería corriendo en:');
+  urls.forEach((u) => console.log(`  ${u}`));
+  wa.init().then(() => {
+    wa.startLowStockScheduler();
+    console.log('[WhatsApp] Alertas de stock bajo activadas (cada 12 horas).');
+  });
 });

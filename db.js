@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
   stock         REAL NOT NULL DEFAULT 0,
   min_stock     REAL NOT NULL DEFAULT 0,
   unit          TEXT NOT NULL DEFAULT 'pza',
+  is_active     INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
@@ -60,6 +61,11 @@ CREATE TABLE IF NOT EXISTS cash_sessions (
   notes          TEXT DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_barcode      ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_name         ON products(name);
 CREATE INDEX IF NOT EXISTS idx_products_category     ON products(category_id);
@@ -67,5 +73,12 @@ CREATE INDEX IF NOT EXISTS idx_sales_created_at      ON sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale       ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product    ON sale_items(product_id);
 `);
+
+const productCols = db.prepare("PRAGMA table_info(products)").all().map((c) => c.name);
+if (!productCols.includes('is_active')) {
+  db.exec('ALTER TABLE products ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+  console.log('[db] Columna is_active agregada a products');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active)');
 
 module.exports = db;

@@ -2,35 +2,139 @@ const cart = new Map(); // product_id -> { product, quantity }
 let lastSale = null;
 let lastPayment = null;
 
+let allProducts = [];
+let categories = [];
+let activeCategory = '';
+let searchTerm = '';
+
 const $ = (id) => document.getElementById(id);
+
+/* ---------------- Catálogo ---------------- */
+
+async function loadCatalog() {
+  try {
+    categories = await api.categories.list();
+    renderCatPills();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+  try {
+    allProducts = await fetchAllProducts();
+  } catch (e) {
+    setAlert(e.message);
+  }
+  renderGrid();
+}
+
+async function fetchAllProducts() {
+  let page = 1;
+  let all = [];
+  let total = Infinity;
+  while (all.length < total) {
+    const data = await api.products.list({ page, pageSize: 100 });
+    all = all.concat(data.products);
+    total = data.total;
+    if (!data.products.length) break;
+    page++;
+  }
+  return all.filter((p) => p.is_active !== 0);
+}
+
+function renderCatPills() {
+  const wrap = $('catPills');
+  wrap.innerHTML = '';
+  const mk = (label, value, active) => {
+    const b = document.createElement('button');
+    b.className = `cat-pill${active ? ' active' : ''}`;
+    b.textContent = label;
+    b.addEventListener('click', () => {
+      activeCategory = value;
+      renderCatPills();
+      renderGrid();
+      $('barcodeInput').focus();
+    });
+    wrap.appendChild(b);
+  };
+  mk('Todos', '', !activeCategory);
+  for (const c of categories) mk(c.name, String(c.id), activeCategory === String(c.id));
+}
+
+function filteredProducts() {
+  const q = searchTerm.trim().toLowerCase();
+  return allProducts.filter((p) => {
+    if (activeCategory && String(p.category_id) !== activeCategory) return false;
+    if (q) {
+      const hay = `${p.name} ${p.barcode}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderGrid() {
+  const grid = $('productGrid');
+  grid.innerHTML = '';
+  const list = filteredProducts();
+  if (!list.length) {
+    grid.innerHTML = `<div class="grid-empty">Sin productos. Revisa el Inventario o cambia la búsqueda.</div>`;
+    return;
+  }
+  for (const p of list) {
+    const out = p.stock <= 0;
+    const card = document.createElement('button');
+    card.className = `prod-card${cart.has(p.id) ? ' in-cart' : ''}`;
+    card.disabled = out;
+    card.dataset.id = p.id;
+    card.innerHTML = `
+      <div class="prod-name">${p.name}</div>
+      <div class="prod-price">${money(p.selling_price)}</div>
+      <div class="prod-meta">${p.unit === 'kg' ? 'por kg' : 'por pieza'}${out ? ' · agotado' : ''}
+        ${cart.has(p.id) ? `<span class="badge badge-warn">${cart.get(p.id).quantity} en carrito</span>` : ''}
+      </div>`;
+    card.title = out ? `${p.name} (agotado)` : `${p.name} · stock: ${p.stock} ${p.unit}`;
+    card.addEventListener('click', () => addToCart(p, 1));
+    grid.appendChild(card);
+  }
+}
 
 /* ---------------- Carrito ---------------- */
 
 function renderCart() {
-  const body = $('cartBody');
-  body.innerHTML = '';
-  let total = 0;
+  const list = $('cartList');
+  list.innerHTML = '';
+  if (cart.size === 0) {
+    list.innerHTML = `<div class="cart-empty"><div class="big">🛒</div>
+      Escanea un código, busca o toca un producto del catálogo.</div>`;
+  }
   for (const { product, quantity } of cart.values()) {
     const subtotal = product.selling_price * quantity;
-    total += subtotal;
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="muted">${product.barcode}</td>
-      <td>${product.name} <span class="muted">(${product.unit})</span></td>
-      <td class="num">${money(product.selling_price)}</td>
-      <td class="num"><input type="number" class="cart-qty" value="${quantity}"
-           min="0.001" step="${product.unit === 'kg' ? 0.01 : 1}"
-           data-id="${product.id}" title="Modificar cantidad"></td>
-      <td class="num subtotal">${money(subtotal)}</td>
-      <td class="num"><button class="btn btn-danger btn-sm rm-btn" data-id="${product.id}">✕</button></td>`;
-    body.appendChild(tr);
+    const item = document.createElement('div');
+    item.className = 'cart-item';
+    const step = product.unit === 'kg' ? 0.01 : 1;
+    item.innerHTML = `
+      <div class="ci-info">
+        <div class="ci-name">${product.name}</div>
+        <div class="ci-meta">${product.barcode} · ${money(product.selling_price)}/${product.unit}</div>
+      </div>
+      <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar del carrito">✕</button>
+      <div class="ci-qty">
+        <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
+        <input type="number" class="cart-qty" value="${quantity}" min="0.001" step="${step}"
+               data-id="${product.id}" title="Modificar cantidad">
+        <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
+      </div>
+      <div class="ci-sub">${money(subtotal)}</div>`;
+    list.appendChild(item);
   }
-  if (cart.size === 0) {
-    body.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;padding:28px;">
-      Carrito vacío. Escanea un código o busca un producto.</td></tr>`;
-  }
-  $('totalLabel').textContent = money(total);
+  renderGrid();
+  $('totalLabel').textContent = money(cartTotal());
   updateChange();
+}
+
+function cartTotal() {
+  let total = 0;
+  for (const { product, quantity } of cart.values()) total += product.selling_price * quantity;
+  return Math.round(total * 100) / 100;
 }
 
 function updateChange() {
@@ -49,12 +153,6 @@ function updateChange() {
     box.textContent = `CAMBIO: ${money(paid - total)}`;
     box.className = 'change-box';
   }
-}
-
-function cartTotal() {
-  let total = 0;
-  for (const { product, quantity } of cart.values()) total += product.selling_price * quantity;
-  return Math.round(total * 100) / 100;
 }
 
 function setAlert(message, type = 'error') {
@@ -78,51 +176,35 @@ async function addToCart(product, qty) {
   setAlert(`${product.name} agregado al carrito.`, 'info');
 }
 
-async function addByBarcode(code) {
-  code = String(code || '').trim();
-  if (!code) return;
-  try {
-    const p = await api.products.byBarcode(code);
-    await addToCart(p, 1);
-    $('barcodeInput').value = '';
-    return p;
-  } catch (e) {
-    setAlert(`Producto no encontrado para el código "${code}".`);
+async function addByInput(value) {
+  value = String(value || '').trim();
+  if (!value) return;
+  const q = value.toLowerCase();
+  const byCode = allProducts.find((p) => p.barcode && p.barcode.trim().toLowerCase() === q);
+  if (byCode) return addToCart(byCode, 1);
+
+  const exact = allProducts.filter((p) => p.name.toLowerCase() === q);
+  let target = exact.length === 1 ? exact[0] : null;
+  if (!target) {
+    const partial = allProducts.filter((p) => p.name.toLowerCase().includes(q));
+    if (partial.length === 1) target = partial[0];
+    else if (partial.length > 1) {
+      searchTerm = value;
+      renderGrid();
+      $('barcodeInput').value = '';
+      setAlert(`Varios productos coinciden con "${value}". Elige uno del catálogo.`);
+      $('barcodeInput').focus();
+      return;
+    }
+  }
+  if (!target) {
+    setAlert(`Producto no encontrado para "${value}".`);
     $('barcodeInput').value = '';
     $('barcodeInput').focus();
+    return;
   }
-}
-
-/* ---------------- Búsqueda ---------------- */
-
-let searchTimer = null;
-async function runSearch(q) {
-  const box = $('searchResults');
-  q = q.trim();
-  if (!q) { box.classList.remove('show'); return; }
-  try {
-    const { products } = await api.products.list({ search: q, pageSize: 8 });
-    if (!box._showing) return;
-    box.innerHTML = '';
-    if (!products.length) {
-      box.innerHTML = `<div class="item"><span class="empty">Sin resultados para "${q}"</span></div>`;
-    }
-    for (const p of products) {
-      const el = document.createElement('div');
-      el.className = 'item';
-      el.innerHTML = `<span><b>${p.name}</b> <span class="meta">${p.barcode}</span></span>
-        <span class="meta">${money(p.selling_price)} · disp. ${p.stock} ${p.unit}</span>`;
-      el.addEventListener('click', () => {
-        addToCart(p, 1);
-        $('searchInput').value = '';
-        box.classList.remove('show');
-        $('barcodeInput').focus();
-      });
-      box.appendChild(el);
-    }
-  } catch (e) {
-    box.innerHTML = `<div class="item"><span class="empty">${e.message}</span></div>`;
-  }
+  await addToCart(target, 1);
+  $('barcodeInput').value = '';
 }
 
 /* ---------------- Cobro ---------------- */
@@ -172,33 +254,48 @@ function cancelSale() {
 /* ---------------- Eventos ---------------- */
 
 $('barcodeInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); addByBarcode($('barcodeInput').value); }
+  if (e.key === 'Enter') { e.preventDefault(); addByInput($('barcodeInput').value); }
+});
+$('addBarcodeBtn').addEventListener('click', () => addByInput($('barcodeInput').value));
+
+$('barcodeInput').addEventListener('input', () => {
+  searchTerm = $('barcodeInput').value;
+  renderGrid();
 });
 
-$('addBarcodeBtn').addEventListener('click', () => addByBarcode($('barcodeInput').value));
-
-$('searchInput').addEventListener('input', () => {
-  const box = $('searchResults');
-  box._showing = true;
-  box.classList.add('show');
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => runSearch($('searchInput').value), 200);
-});
-$('searchInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { $('searchResults').classList.remove('show'); }
-});
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.search-wrap')) $('searchResults').classList.remove('show');
+$('productGrid').addEventListener('click', (e) => {
+  const card = e.target.closest('.prod-card');
+  if (!card || card.disabled) return;
+  const p = allProducts.find((x) => x.id === Number(card.dataset.id));
+  if (p) addToCart(p, 1);
 });
 
-$('cartBody').addEventListener('click', (e) => {
-  const btn = e.target.closest('.rm-btn');
+$('cartList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.rm-btn, .qty-minus, .qty-plus');
   if (!btn) return;
-  cart.delete(Number(btn.dataset.id));
+  const id = Number(btn.dataset.id);
+  const entry = cart.get(id);
+  if (!entry) return;
+  if (btn.classList.contains('rm-btn')) {
+    cart.delete(id);
+  } else if (btn.classList.contains('qty-minus')) {
+    const dec = entry.product.unit === 'kg' ? 0.01 : 1;
+    const qty = Math.round((entry.quantity - dec) * 100) / 100;
+    if (qty > 0) entry.quantity = qty;
+    else cart.delete(id);
+  } else {
+    const inc = entry.product.unit === 'kg' ? 0.01 : 1;
+    const qty = entry.quantity + inc;
+    if (qty > entry.product.stock && entry.product.unit !== 'kg') {
+      setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
+      return;
+    }
+    entry.quantity = qty;
+  }
   renderCart();
 });
 
-$('cartBody').addEventListener('change', (e) => {
+$('cartList').addEventListener('change', (e) => {
   const input = e.target.closest('.cart-qty');
   if (!input) return;
   const id = Number(input.dataset.id);
@@ -219,10 +316,22 @@ $('cartBody').addEventListener('change', (e) => {
 $('amountPaid').addEventListener('input', updateChange);
 $('payMethod').addEventListener('change', () => {
   const isCash = $('payMethod').value === 'efectivo';
+  $('cashRow').classList.toggle('hidden', !isCash);
   $('amountPaid').disabled = !isCash;
   if (!isCash) { $('amountPaid').value = cartTotal().toFixed(2); }
   updateChange();
 });
+
+document.querySelectorAll('.quick-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const total = cartTotal();
+    const amt = btn.dataset.amt === '0' ? total : Number(btn.dataset.amt);
+    $('amountPaid').value = amt.toFixed(2);
+    updateChange();
+    $('chargeBtn').focus();
+  });
+});
+
 $('chargeBtn').addEventListener('click', charge);
 $('cancelBtn').addEventListener('click', cancelSale);
 $('previewBtn').addEventListener('click', () => {
@@ -247,4 +356,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-window.addEventListener('load', () => $('barcodeInput').focus());
+window.addEventListener('load', () => {
+  loadCatalog();
+  $('barcodeInput').focus();
+});

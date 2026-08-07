@@ -8,29 +8,34 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🍭 POS Dulcería</div>
+    <div class="brand"><span class="cup">☕</span> POS Dulcería</div>
     <nav>
       <a href="index.html">Vender</a>
       <a href="inventario.html" class="active">Inventario</a>
       <a href="reportes.html">Reportes</a>
+      <a href="whatsapp.html">WhatsApp</a>
     </nav>
   </header>
 
   <div class="container">
     <div class="toolbar">
       <input type="search" id="searchInput" placeholder="Buscar por nombre o código…">
-      <select id="catFilter" style="max-width:200px;">
-        <option value="">Todas las categorías</option>
-      </select>
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
         <input type="checkbox" id="lowStockOnly"> <b>Solo stock bajo</b>
       </label>
       <button class="btn" id="newBtn">+ Nuevo producto</button>
-      <button class="btn btn-warning" id="exportBtn">Exportar inventario (.json)</button>
-      <button class="btn btn-outline" id="importBtn">Importar inventario (.json)</button>
+      <button class="btn btn-danger" id="deleteAllBtn">Eliminar todos</button>
+      <button class="btn btn-success hidden" id="genAllBarcodesBtn">Regenerar códigos</button>
+      <button class="btn btn-coffee hidden" id="exportBarcodesBtn">Exportar códigos de barras</button>
+      <button class="btn btn-success hidden" id="waLowStockBtn">Enviar alerta stock (prueba)</button>
+      <button class="btn btn-danger hidden" id="waResetBtn">Resetear sesión WhatsApp</button>
+      <button class="btn btn-warning hidden" id="exportBtn">Exportar inventario (.json)</button>
+      <button class="btn btn-outline hidden" id="importBtn">Importar inventario (.json)</button>
       <input type="file" id="importFile" accept=".json,application/json" class="hidden">
       <button class="btn btn-secondary" id="catsBtn">Categorías</button>
     </div>
+
+    <div class="cat-pills" id="catPills" style="margin-top:12px;"></div>
 
     <div id="lowStockBanner" class="alert alert-error hidden"></div>
 
@@ -46,6 +51,7 @@
             <th class="num">Stock</th>
             <th class="num">Mínimo</th>
             <th class="num">Utilidad</th>
+            <th>Estado</th>
             <th></th>
           </tr>
         </thead>
@@ -66,7 +72,15 @@
         </div>
         <div class="form-field full">
           <label>Código de barras *</label>
-          <input type="text" id="fBarcode">
+          <div class="barcode-gen-row">
+            <input type="text" id="fBarcode" placeholder="Código (o genera uno automáticamente)">
+            <button type="button" class="btn btn-outline" id="genBarcodeBtn" title="Generar un código único de 6 caracteres">Generar</button>
+          </div>
+          <div class="hint">6 caracteres: 2 letras de la categoría + 2 del producto + 2 dígitos aleatorios.</div>
+          <div class="barcode-preview hidden" id="barcodePreviewWrap">
+            <svg id="barcodePreview"></svg>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="printBarcodeBtn" title="Imprimir la etiqueta del código">🖨 Imprimir etiqueta</button>
         </div>
         <div class="form-field full">
           <label>Categoría</label>
@@ -121,6 +135,8 @@
 
   <script src="js/api.js"></script>
   <script src="js/ui.js"></script>
+  <script src="vendor/JsBarcode.all.min.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
   <script src="js/inventario.js"></script>
 </body>
 </html>

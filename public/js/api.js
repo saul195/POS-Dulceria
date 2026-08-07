@@ -30,9 +30,11 @@ const api = {
     },
     get: (id) => api.get(`/api/products/${id}`),
     byBarcode: (code) => api.get(`/api/products/barcode/${encodeURIComponent(code)}`),
+    checkBarcode: (code, excludeId) => api.get(`/api/products/check-barcode?${new URLSearchParams({ code, excludeId: excludeId || '' })}`),
     create: (b) => api.post('/api/products', b),
     update: (id, b) => api.put(`/api/products/${id}`, b),
     remove: (id) => api.del(`/api/products/${id}`),
+    deleteAll: () => api.post('/api/products/delete-all'),
     import: (products) => api.post('/api/products/import', { products }),
     exportAll: () => api.get('/api/products/export'),
   },
@@ -52,6 +54,14 @@ const api = {
     status: () => api.get('/api/cash/status'),
     open: (b) => api.post('/api/cash/open', b),
     close: (b) => api.post('/api/cash/close', b),
+  },
+  whatsapp: {
+    login: (password) => api.post('/api/whatsapp/login', { password }),
+    status: () => api.get('/api/whatsapp/status'),
+    config: (b) => api.put('/api/whatsapp/config', b),
+    test: () => api.post('/api/whatsapp/test'),
+    lowstock: () => api.post('/api/whatsapp/lowstock'),
+    resetSession: () => api.post('/api/whatsapp/reset-session'),
   },
 };
 

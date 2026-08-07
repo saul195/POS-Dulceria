@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS Dulcería · WhatsApp</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="cup">☕</span> POS Dulcería</div>
+    <nav>
+      <a href="index.html">Vender</a>
+      <a href="inventario.html">Inventario</a>
+      <a href="reportes.html">Reportes</a>
+      <a href="whatsapp.html" class="active">WhatsApp</a>
+    </nav>
+  </header>
+
+  <div class="wa-wrap">
+    <div id="loginBox" class="card wa-card">
+      <div class="wa-head">
+        <div class="wa-icon">🔒</div>
+        <h2>WhatsApp</h2>
+        <p class="muted">Panel de alertas de stock bajo</p>
+      </div>
+      <div class="wa-login">
+        <div id="netStatusLogin" class="wa-net">Verificando conexión…</div>
+        <input type="password" id="waPassword" placeholder="Contraseña" autocomplete="off">
+        <button class="btn btn-lg btn-block" id="waLoginBtn">Entrar</button>
+      </div>
+    </div>
+
+    <div id="configBox" class="card wa-card hidden">
+      <div class="wa-head">
+        <div class="wa-icon">💬</div>
+        <h2>Alertas de stock bajo</h2>
+        <p class="muted">El mensaje llega cada 12 horas si hay productos con stock bajo.</p>
+      </div>
+
+      <div id="netStatusConfig" class="wa-net">Verificando conexión…</div>
+
+      <div class="wa-field">
+        <label for="waNumber">Número que recibe el mensaje</label>
+        <input type="text" id="waNumber" placeholder="Ej. 5218123456789" autocomplete="off">
+      </div>
+
+      <label class="wa-toggle">
+        <input type="checkbox" id="waEnabled">
+        <span>Activar alerta automática (cada 12 h)</span>
+      </label>
+
+      <div class="wa-actions">
+        <button class="btn btn-success" id="waSaveBtn">💾 Guardar</button>
+        <button class="btn btn-outline" id="waTestBtn">Enviar prueba</button>
+        <button class="btn btn-warning" id="waLowStockBtn">Enviar alerta stock</button>
+        <button class="btn btn-danger" id="waResetBtn">Resetear sesión</button>
+      </div>
+
+      <div id="waStatus" class="wa-status">Cargando estado…</div>
+      <div id="waQr" class="hidden wa-qr"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/whatsapp.js"></script>
+</body>
+</html>

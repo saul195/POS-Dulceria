@@ -1,0 +1,22 @@
+{
+  "name": "pos-dulceria",
+  "version": "1.0.0",
+  "description": "Punto de Venta (POS) local para una dulcería",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node seed.js"
+  },
+  "keywords": [
+    "pos",
+    "dulceria",
+    "express",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.22.2"
+  }
+}

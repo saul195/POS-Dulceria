@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS Dulcería · Reportes</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🍭 POS Dulcería</div>
+    <nav>
+      <a href="index.html">Vender</a>
+      <a href="inventario.html">Inventario</a>
+      <a href="reportes.html" class="active">Reportes</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <h2 style="margin-bottom:16px;color:var(--primary-dark);">Reporte del día <span class="muted" id="reportDate"></span></h2>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="label">Ventas del día</div>
+        <div class="value" id="statTotal">$0.00</div>
+      </div>
+      <div class="stat">
+        <div class="label">Transacciones</div>
+        <div class="value" id="statCount">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Ganancia neta</div>
+        <div class="value" id="statProfit">$0.00</div>
+        <div class="sub">Ventas − Costos</div>
+      </div>
+      <div class="stat">
+        <div class="label">Costo total</div>
+        <div class="value" id="statCost">$0.00</div>
+      </div>
+    </div>
+
+    <div class="pos-wrap">
+      <div class="card">
+        <h2>Transacciones del día</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th># Ticket</th>
+                <th>Hora</th>
+                <th>Método</th>
+                <th class="num">Artículos</th>
+                <th class="num">Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="salesBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="salesPagination"></div>
+      </div>
+
+      <div>
+        <div class="card mb">
+          <h2>Top 5 más vendidos</h2>
+          <ol id="topList" style="padding-left:20px;line-height:2;"></ol>
+        </div>
+        <div class="card mb">
+          <h2>Métodos de pago</h2>
+          <div id="methodList"></div>
+        </div>
+        <div class="card">
+          <h2>Stock bajo</h2>
+          <div id="lowStockList" class="muted">Cargando…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <h2>Apertura y Cierre de Caja</h2>
+      <div id="cashBox"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/ticket.js"></script>
+  <script src="js/reportes.js"></script>
+</body>
+</html>

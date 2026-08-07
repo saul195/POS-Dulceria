@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS Dulcería · Inventario</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🍭 POS Dulcería</div>
+    <nav>
+      <a href="index.html">Vender</a>
+      <a href="inventario.html" class="active">Inventario</a>
+      <a href="reportes.html">Reportes</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="toolbar">
+      <input type="search" id="searchInput" placeholder="Buscar por nombre o código…">
+      <select id="catFilter" style="max-width:200px;">
+        <option value="">Todas las categorías</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
+        <input type="checkbox" id="lowStockOnly"> <b>Solo stock bajo</b>
+      </label>
+      <button class="btn" id="newBtn">+ Nuevo producto</button>
+      <button class="btn btn-warning" id="exportBtn">Exportar inventario (.json)</button>
+      <button class="btn btn-outline" id="importBtn">Importar inventario (.json)</button>
+      <input type="file" id="importFile" accept=".json,application/json" class="hidden">
+      <button class="btn btn-secondary" id="catsBtn">Categorías</button>
+    </div>
+
+    <div id="lowStockBanner" class="alert alert-error hidden"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Barcode</th>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th class="num">Costo</th>
+            <th class="num">Precio</th>
+            <th class="num">Stock</th>
+            <th class="num">Mínimo</th>
+            <th class="num">Utilidad</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <div id="productModal" class="modal-backdrop">
+    <div class="modal">
+      <h3 id="modalTitle">Nuevo producto</h3>
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>Nombre *</label>
+          <input type="text" id="fName">
+        </div>
+        <div class="form-field full">
+          <label>Código de barras *</label>
+          <input type="text" id="fBarcode">
+        </div>
+        <div class="form-field full">
+          <label>Categoría</label>
+          <select id="fCategory"></select>
+        </div>
+        <div class="form-field">
+          <label>Precio de costo ($)</label>
+          <input type="number" id="fCost" step="0.01" min="0">
+        </div>
+        <div class="form-field">
+          <label>Precio de venta ($)</label>
+          <input type="number" id="fPrice" step="0.01" min="0">
+        </div>
+        <div class="form-field">
+          <label>Stock</label>
+          <input type="number" id="fStock" step="0.01" min="0">
+        </div>
+        <div class="form-field">
+          <label>Stock mínimo (alerta)</label>
+          <input type="number" id="fMinStock" step="0.01" min="0">
+        </div>
+        <div class="form-field full">
+          <label>Unidad (pza / kg / g / caja)</label>
+          <input type="text" id="fUnit" value="pza">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="productCancel">Cancelar</button>
+        <button class="btn btn-success" id="productSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="catsModal" class="modal-backdrop">
+    <div class="modal">
+      <h3>Gestionar categorías</h3>
+      <div class="row mb">
+        <input type="text" id="newCatName" class="grow" placeholder="Nombre de la nueva categoría">
+        <button class="btn" id="addCatBtn">Agregar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Productos</th><th></th></tr></thead>
+          <tbody id="catsTbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="catsClose">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/inventario.js"></script>
+</body>
+</html>

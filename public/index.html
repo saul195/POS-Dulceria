@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS Dulcería · Centro de Cobro</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🍭 POS Dulcería</div>
+    <nav>
+      <a href="index.html" class="active">Vender</a>
+      <a href="inventario.html">Inventario</a>
+      <a href="reportes.html">Reportes</a>
+    </nav>
+  </header>
+
+  <div class="helpbar">
+    <span><b>F2</b> Enfocar código</span>
+    <span><b>Enter</b> Agregar producto</span>
+    <span><b>F9</b> Cobrar e imprimir</span>
+    <span><b>Esc</b> Cancelar venta</span>
+  </div>
+
+  <div class="container">
+    <div class="pos-wrap">
+      <div class="card">
+        <h2>Centro de Cobro</h2>
+
+        <div class="barcode-row mb">
+          <input type="text" id="barcodeInput" placeholder="Código de barras / lápiz lector… (Enter para agregar)"
+                 autocomplete="off" autofocus>
+          <button class="btn btn-outline" id="addBarcodeBtn" title="Agregar por código (Enter)">Agregar</button>
+        </div>
+
+        <div class="search-wrap mb">
+          <input type="search" id="searchInput" placeholder="Buscar producto por nombre…"
+                 autocomplete="off">
+          <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <div class="alert hidden" id="posAlert"></div>
+
+        <div class="table-wrap">
+          <table id="cartTable">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th class="num">Precio</th>
+                <th class="num">Cantidad</th>
+                <th class="num">Subtotal</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="cartBody"></tbody>
+          </table>
+        </div>
+        <div class="cart-total-row">
+          <span class="lbl">TOTAL</span>
+          <span class="val" id="totalLabel">$0.00</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Cobro</h2>
+        <div class="pay-row">
+          <label for="payMethod">Método de pago</label>
+          <select id="payMethod">
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        </div>
+        <div class="pay-row">
+          <label for="amountPaid">Efectivo recibido</label>
+          <input type="number" id="amountPaid" class="amount-paid" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="change-box" id="changeBox">CAMBIO: $0.00</div>
+        <div class="pay-row mt">
+          <button class="btn btn-success btn-lg btn-block" id="chargeBtn">
+            Cobrar e imprimir (F9)
+          </button>
+        </div>
+        <div class="pay-row">
+          <button class="btn btn-danger btn-block" id="cancelBtn">Cancelar venta (Esc)</button>
+        </div>
+        <div class="pay-row mt">
+          <button class="btn btn-outline btn-sm" id="previewBtn" title="Ver el ticket del último cobro">Vista previa último ticket</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/ticket.js"></script>
+  <script src="js/pos.js"></script>
+</body>
+</html>

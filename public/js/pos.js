@@ -4,7 +4,7 @@ let lastPayment = null;
 
 let allProducts = [];
 let categories = [];
-let activeCategory = '';
+let activeCategory = localStorage.getItem('pos_cat') || '';
 let searchTerm = '';
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +49,7 @@ function renderCatPills() {
     b.textContent = label;
     b.addEventListener('click', () => {
       activeCategory = value;
+      localStorage.setItem('pos_cat', value);
       renderCatPills();
       renderGrid();
       $('barcodeInput').focus();
@@ -82,17 +83,18 @@ function renderGrid() {
   for (const p of list) {
     const out = p.stock <= 0;
     const card = document.createElement('button');
+    const isKg = p.unit === 'kg';
     card.className = `prod-card${cart.has(p.id) ? ' in-cart' : ''}`;
     card.disabled = out;
     card.dataset.id = p.id;
     card.innerHTML = `
+      ${!out && (!isKg || p.price_per_100g > 0) ? '<span class="card-plus" title="Agregar 1 al instante">+</span>' : ''}
       <div class="prod-name">${p.name}</div>
       <div class="prod-price">${money(p.selling_price)}</div>
-      <div class="prod-meta">${p.unit === 'kg' ? 'por kg' : 'por pieza'}${out ? ' · agotado' : ''}
-        ${cart.has(p.id) ? `<span class="badge badge-warn">${cart.get(p.id).quantity} en carrito</span>` : ''}
+      <div class="prod-meta">${isKg ? 'por peso' : 'por pieza'}${out ? ' · agotado' : ''}
+        ${cart.has(p.id) ? `<span class="badge badge-warn">${entryDisplay(cart.get(p.id))}${entryUnit(cart.get(p.id))} en carrito</span>` : ''}
       </div>`;
     card.title = out ? `${p.name} (agotado)` : `${p.name} · stock: ${p.stock} ${p.unit}`;
-    card.addEventListener('click', () => addToCart(p, 1));
     grid.appendChild(card);
   }
 }
@@ -106,11 +108,14 @@ function renderCart() {
     list.innerHTML = `<div class="cart-empty"><div class="big">🛒</div>
       Escanea un código, busca o toca un producto del catálogo.</div>`;
   }
-  for (const { product, quantity } of cart.values()) {
-    const subtotal = product.selling_price * quantity;
+  for (const { product, quantity, displayUnit, unitPrice } of cart.values()) {
+    const entry = { product, quantity, displayUnit, unitPrice };
+    const subtotal = unitPrice * quantity;
+    const d = entryDisplay(entry);
+    const u = entryUnit(entry);
     const item = document.createElement('div');
     item.className = 'cart-item';
-    const step = product.unit === 'kg' ? 0.01 : 1;
+    const step = cartStep(entry);
     item.innerHTML = `
       <div class="ci-info">
         <div class="ci-name">${product.name}</div>
@@ -119,8 +124,9 @@ function renderCart() {
       <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar del carrito">✕</button>
       <div class="ci-qty">
         <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
-        <input type="number" class="cart-qty" value="${quantity}" min="0.001" step="${step}"
+        <input type="number" class="cart-qty" value="${d}" min="0.001" step="${step}"
                data-id="${product.id}" title="Modificar cantidad">
+        <span class="ci-unit">${u}</span>
         <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
       </div>
       <div class="ci-sub">${money(subtotal)}</div>`;
@@ -133,7 +139,7 @@ function renderCart() {
 
 function cartTotal() {
   let total = 0;
-  for (const { product, quantity } of cart.values()) total += product.selling_price * quantity;
+  for (const { quantity, unitPrice } of cart.values()) total += unitPrice * quantity;
   return Math.round(total * 100) / 100;
 }
 
@@ -163,17 +169,155 @@ function setAlert(message, type = 'error') {
   setTimeout(() => el.classList.add('hidden'), 3500);
 }
 
-async function addToCart(product, qty) {
+async function addToCart(product, qty, displayUnit) {
   if (!product) return;
   const existing = cart.get(product.id);
-  const newQty = (existing ? existing.quantity : 0) + qty;
+  const newQty = Math.round(((existing ? existing.quantity : 0) + qty) * 1000) / 1000;
   if (newQty > product.stock && product.unit !== 'kg') {
     setAlert(`Stock insuficiente de "${product.name}". Disponible: ${product.stock} ${product.unit}`);
     return;
   }
-  cart.set(product.id, { product, quantity: newQty });
+  const entry = { product, quantity: newQty, displayUnit, unitPrice: entryPrice({ product, quantity: newQty, displayUnit }) };
+  cart.set(product.id, entry);
   renderCart();
   setAlert(`${product.name} agregado al carrito.`, 'info');
+}
+
+/* ---------------- Selector de cantidad (modal) ---------------- */
+
+let qtyState = { product: null, unit: 'kg' };
+
+function entryDisplay(entry) {
+  const { product, quantity, displayUnit } = entry;
+  if (product.unit === 'kg' && displayUnit === 'gr') return Math.round(quantity * 1000);
+  if (product.unit === 'kg' && displayUnit === '100g') return Math.round(quantity * 10);
+  return Math.round(quantity * 1000) / 1000;
+}
+
+function entryUnit(entry) {
+  const { product, displayUnit } = entry;
+  if (product.unit === 'kg' && displayUnit === 'gr') return 'g';
+  if (product.unit === 'kg' && displayUnit === '100g') return '×100g';
+  return product.unit;
+}
+
+function entryPrice(entry) {
+  const { product, displayUnit } = entry;
+  if (product.unit === 'kg' && displayUnit === '100g') return product.price_per_100g * 10;
+  return product.selling_price;
+}
+
+function setEntryQty(entry, displayValue) {
+  const { product, displayUnit } = entry;
+  if (product.unit === 'kg' && displayUnit === 'gr') entry.quantity = displayValue / 1000;
+  else if (product.unit === 'kg' && displayUnit === '100g') entry.quantity = displayValue / 10;
+  else entry.quantity = displayValue;
+}
+
+function cartStep(entry) {
+  if (entry.product.unit !== 'kg') return 1;
+  if (entry.displayUnit === '100g') return 1;
+  if (entry.displayUnit === 'gr') return 10;
+  return 0.01;
+}
+
+const toBaseQty = (unit) => unit === 'gr' ? 1 / 1000 : unit === '100g' ? 1 / 10 : 1;
+const fromBaseQty = (unit) => unit === 'gr' ? 1000 : unit === '100g' ? 10 : 1;
+
+function qtyBaseValue() {
+  const q = parseFloat($('qmQty').value);
+  return q * toBaseQty(qtyState.unit);
+}
+
+function updateQtyPreview() {
+  const p = qtyState.product;
+  if (!p) return;
+  const q = parseFloat($('qmQty').value);
+  const base = q * toBaseQty(qtyState.unit);
+  const valid = q > 0;
+  const unitLabel = qtyState.unit === '100g' ? '×100g' : (qtyState.unit === 'gr' ? 'g' : 'kg');
+  $('qmOk').disabled = !valid;
+  $('qmQtyUnit').textContent = unitLabel;
+  if (p.unit === 'kg' && valid && base > p.stock) {
+    $('qmInfo').textContent = `⚠️ Estás superando el stock disponible (${p.stock} kg)`;
+  } else {
+    $('qmInfo').textContent = `Stock disponible: ${p.stock} ${p.unit === 'kg' ? 'kg' : p.unit}`;
+  }
+}
+
+function setQtyModalUnit(unit) {
+  const p = qtyState.product;
+  if (!p) return;
+  if (unit === '100g') {
+    $('qmQty').value = 1;
+    $('qmQty').step = '1';
+    $('qmQty').min = '1';
+    qtyState.unit = '100g';
+    $('qmUnitToggle').querySelectorAll('.unit-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.unit === unit);
+    });
+    $('qmQtyLabel').textContent = 'Paquetes de 100 g';
+    confirmQtyModal();
+    return;
+  }
+  const prev = qtyState.unit;
+  qtyState.unit = unit;
+  $('qmUnitToggle').querySelectorAll('.unit-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.unit === unit);
+  });
+  let val = parseFloat($('qmQty').value) || 0;
+  val = Math.round(val * toBaseQty(prev) * fromBaseQty(unit) * 1000) / 1000;
+  if (!val) val = unit === 'kg' ? 1 : (unit === 'gr' ? 100 : 1);
+  $('qmQty').value = val;
+  $('qmQty').step = unit === 'kg' ? '0.01' : '1';
+  $('qmQty').min = unit === 'kg' ? '0' : '1';
+  $('qmQtyLabel').textContent = unit === 'kg' ? 'Cantidad en kilogramos' : unit === 'gr' ? 'Cantidad en gramos' : 'Paquetes de 100 g';
+  updateQtyPreview();
+}
+
+function openQtyModal(product) {
+  if (!product) return;
+  qtyState.product = product;
+  qtyState.unit = 'kg';
+  $('qmTitle').textContent = product.name;
+  $('qmName').textContent = product.name;
+  const has100 = product.unit === 'kg' && product.price_per_100g != null && product.price_per_100g > 0;
+  $('qmMeta').textContent = `${product.barcode || 's/c'} · ${money(product.selling_price)} por kg · Stock: ${product.stock} kg`;
+  $('qmUnitToggle').classList.toggle('hidden', product.unit !== 'kg');
+  const btn100 = $('qmUnit100');
+  if (btn100) {
+    btn100.classList.toggle('hidden', !has100);
+    btn100.textContent = `Por 100 g · ${money(product.price_per_100g || 0)}`;
+  }
+  if (product.unit === 'kg') {
+    setQtyModalUnit('gr');
+  } else {
+    qtyState.unit = product.unit;
+    $('qmQty').value = 1;
+    $('qmQty').step = '1';
+    $('qmQty').min = '1';
+    $('qmQtyLabel').textContent = 'Cantidad';
+    $('qmQtyUnit').textContent = product.unit;
+    updateQtyPreview();
+  }
+  $('qtyModal').classList.add('show');
+  setTimeout(() => { $('qmQty').focus(); $('qmQty').select(); }, 60);
+}
+
+function closeQtyModal() {
+  $('qtyModal').classList.remove('show');
+  qtyState.product = null;
+}
+
+function confirmQtyModal() {
+  const p = qtyState.product;
+  if (!p) return;
+  const base = qtyBaseValue();
+  if (!(base > 0)) return;
+  const displayUnit = p.unit === 'kg' ? qtyState.unit : undefined;
+  addToCart(p, base, displayUnit);
+  closeQtyModal();
+  setTimeout(() => $('barcodeInput').focus(), 50);
 }
 
 async function addByInput(value) {
@@ -181,7 +325,7 @@ async function addByInput(value) {
   if (!value) return;
   const q = value.toLowerCase();
   const byCode = allProducts.find((p) => p.barcode && p.barcode.trim().toLowerCase() === q);
-  if (byCode) return addToCart(byCode, 1);
+  if (byCode) return openQtyModal(byCode);
 
   const exact = allProducts.filter((p) => p.name.toLowerCase() === q);
   let target = exact.length === 1 ? exact[0] : null;
@@ -203,7 +347,7 @@ async function addByInput(value) {
     $('barcodeInput').focus();
     return;
   }
-  await addToCart(target, 1);
+  openQtyModal(target);
   $('barcodeInput').value = '';
 }
 
@@ -222,7 +366,13 @@ async function charge() {
   chargeBtn.disabled = true;
   chargeBtn.textContent = 'Procesando…';
   try {
-    const items = [...cart.values()].map(({ product, quantity }) => ({ product_id: product.id, quantity }));
+    const items = [...cart.values()].map(({ product, quantity, displayUnit, unitPrice }) => ({
+      product_id: product.id,
+      quantity,
+      unit_price: unitPrice,
+      sale_mode: product.unit === 'kg' && displayUnit === '100g' ? '100g' : 'kg',
+      sale_price: product.unit === 'kg' && displayUnit === '100g' ? product.price_per_100g : unitPrice,
+    }));
     const sale = await api.sales.create({ items, payment_method: payment });
     lastSale = sale;
     lastPayment = { amountPaid: paid, change: Math.round((paid - sale.total_amount) * 100) / 100 };
@@ -264,10 +414,21 @@ $('barcodeInput').addEventListener('input', () => {
 });
 
 $('productGrid').addEventListener('click', (e) => {
+  const plus = e.target.closest('.card-plus');
+  if (plus) {
+    const card = plus.closest('.prod-card');
+    if (!card || card.disabled) return;
+    const p = allProducts.find((x) => x.id === Number(card.dataset.id));
+    if (p && p.stock > 0) {
+      if (p.unit === 'kg') addToCart(p, 0.1, '100g');
+      else addToCart(p, 1);
+    }
+    return;
+  }
   const card = e.target.closest('.prod-card');
   if (!card || card.disabled) return;
   const p = allProducts.find((x) => x.id === Number(card.dataset.id));
-  if (p) addToCart(p, 1);
+  if (p) openQtyModal(p);
 });
 
 $('cartList').addEventListener('click', (e) => {
@@ -279,18 +440,18 @@ $('cartList').addEventListener('click', (e) => {
   if (btn.classList.contains('rm-btn')) {
     cart.delete(id);
   } else if (btn.classList.contains('qty-minus')) {
-    const dec = entry.product.unit === 'kg' ? 0.01 : 1;
-    const qty = Math.round((entry.quantity - dec) * 100) / 100;
-    if (qty > 0) entry.quantity = qty;
+    const dec = cartStep(entry);
+    const nv = Math.round((entryDisplay(entry) - dec) * 1000) / 1000;
+    if (nv > 0) setEntryQty(entry, nv);
     else cart.delete(id);
   } else {
-    const inc = entry.product.unit === 'kg' ? 0.01 : 1;
-    const qty = entry.quantity + inc;
-    if (qty > entry.product.stock && entry.product.unit !== 'kg') {
+    const inc = cartStep(entry);
+    const nv = Math.round((entryDisplay(entry) + inc) * 1000) / 1000;
+    if (nv > entry.product.stock && entry.product.unit !== 'kg') {
       setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
       return;
     }
-    entry.quantity = qty;
+    setEntryQty(entry, nv);
   }
   renderCart();
 });
@@ -303,13 +464,16 @@ $('cartList').addEventListener('change', (e) => {
   if (!entry) return;
   const qty = parseFloat(input.value);
   if (!(qty > 0)) { cart.delete(id); renderCart(); return; }
-  if (qty > entry.product.stock && entry.product.unit !== 'kg') {
+  const base = entry.product.unit === 'kg' && entry.displayUnit === 'gr' ? qty / 1000
+    : entry.product.unit === 'kg' && entry.displayUnit === '100g' ? qty / 10
+    : qty;
+  if (base > entry.product.stock && entry.product.unit !== 'kg') {
     setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
     entry.quantity = entry.product.stock;
     renderCart();
     return;
   }
-  entry.quantity = qty;
+  entry.quantity = Math.round(base * 1000) / 1000;
   renderCart();
 });
 
@@ -334,6 +498,31 @@ document.querySelectorAll('.quick-btn').forEach((btn) => {
 
 $('chargeBtn').addEventListener('click', charge);
 $('cancelBtn').addEventListener('click', cancelSale);
+
+/* Selector de cantidad (modal) */
+$('qmOk').addEventListener('click', confirmQtyModal);
+$('qmCancel').addEventListener('click', closeQtyModal);
+$('qmQty').addEventListener('input', updateQtyPreview);
+$('qmQty').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmQtyModal(); }
+});
+$('qmMinus').addEventListener('click', () => {
+  const step = qtyState.unit === 'gr' ? 10 : qtyState.unit === '100g' ? 1 : 0.01;
+  const cur = parseFloat($('qmQty').value) || 0;
+  $('qmQty').value = Math.max(0, Math.round((cur - step) * 1000) / 1000);
+  updateQtyPreview();
+});
+$('qmPlus').addEventListener('click', () => {
+  const step = qtyState.unit === 'gr' ? 10 : qtyState.unit === '100g' ? 1 : 0.01;
+  const cur = parseFloat($('qmQty').value) || 0;
+  $('qmQty').value = Math.round((cur + step) * 1000) / 1000;
+  updateQtyPreview();
+});
+$('qmUnitToggle').addEventListener('click', (e) => {
+  const b = e.target.closest('.unit-btn');
+  if (b) setQtyModalUnit(b.dataset.unit);
+});
+
 $('previewBtn').addEventListener('click', () => {
   if (!lastSale) { setAlert('Aún no hay un ticket para previsualizar.', 'info'); return; }
   previewTicket(lastSale, lastPayment);
@@ -341,19 +530,38 @@ $('previewBtn').addEventListener('click', () => {
 
 /* Atajos de teclado */
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'F1') {
+    e.preventDefault();
+    $('helpModal').classList.add('show');
+  }
   if (e.key === 'F2') {
     e.preventDefault();
     $('barcodeInput').focus();
     $('barcodeInput').select();
+  }
+  if (e.key === 'F4') {
+    e.preventDefault();
+    $('amountPaid').focus();
+    $('amountPaid').select();
   }
   if (e.key === 'F9') {
     e.preventDefault();
     charge();
   }
   if (e.key === 'Escape') {
+    const qtyOpen = $('qtyModal').classList.contains('show');
+    if (qtyOpen) { closeQtyModal(); return; }
+    const helpOpen = $('helpModal').classList.contains('show');
+    if (helpOpen) { $('helpModal').classList.remove('show'); return; }
     const modal = document.querySelector('.modal-backdrop.show');
     if (!modal) cancelSale();
   }
+});
+
+$('helpClose').addEventListener('click', () => $('helpModal').classList.remove('show'));
+
+$('amountPaid').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); charge(); }
 });
 
 window.addEventListener('load', () => {

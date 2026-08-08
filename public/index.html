@@ -18,10 +18,11 @@
   </header>
 
   <div class="helpbar">
-    <span><b>F2</b> Enfocar código</span>
-    <span><b>Enter</b> Agregar producto</span>
+    <span><b>F1</b> Ayuda</span>
+    <span><b>F2</b> Código / buscar</span>
+    <span><b>F4</b> Efectivo recibido</span>
     <span><b>F9</b> Cobrar e imprimir</span>
-    <span><b>Esc</b> Cancelar venta</span>
+    <span><b>Esc</b> Cerrar / cancelar venta</span>
   </div>
 
   <div class="container">
@@ -64,6 +65,7 @@
           <input type="number" id="amountPaid" class="amount-paid" min="0" step="0.01" placeholder="0.00">
           <div class="quick-pay">
             <button class="btn btn-outline quick-btn" data-amt="0">Exacto</button>
+            <button class="btn btn-outline quick-btn" data-amt="10">$10</button>
             <button class="btn btn-outline quick-btn" data-amt="20">$20</button>
             <button class="btn btn-outline quick-btn" data-amt="50">$50</button>
             <button class="btn btn-outline quick-btn" data-amt="100">$100</button>
@@ -84,6 +86,55 @@
         <div class="pay-row mt">
           <button class="btn btn-outline btn-sm" id="previewBtn" title="Ver el ticket del último cobro">Vista previa último ticket</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="helpModal" class="modal-backdrop">
+    <div class="modal">
+      <h3>Atajos de teclado</h3>
+      <table class="help-table">
+        <tr><td><b>F1</b></td><td>Mostrar esta ayuda</td></tr>
+        <tr><td><b>F2</b></td><td>Enfocar el campo de código de barras</td></tr>
+        <tr><td><b>Enter</b></td><td>Agregar el producto escaneado/buscado</td></tr>
+        <tr><td><b>F4</b></td><td>Ir al campo de efectivo recibido</td></tr>
+        <tr><td><b>F9</b></td><td>Cobrar e imprimir ticket</td></tr>
+        <tr><td><b>Enter</b> (en efectivo)</td><td>Cobrar</td></tr>
+        <tr><td><b>Esc</b></td><td>Cerrar ventana o cancelar venta</td></tr>
+        <tr><td><b>+</b> en una tarjeta</td><td>Agregar 1 al instante (100 g si es por peso)</td></tr>
+      </table>
+      <div class="hint">Para los productos que se venden por peso (kg/g), siempre se abre la ventana de cantidad.</div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="helpClose">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qtyModal" class="modal-backdrop">
+    <div class="modal">
+      <h3 id="qmTitle">Cantidad</h3>
+      <div class="qm-product">
+        <div id="qmName" class="qm-name"></div>
+        <div id="qmMeta" class="qm-meta"></div>
+      </div>
+      <div id="qmUnitToggle" class="unit-toggle hidden">
+        <button type="button" class="unit-btn" data-unit="kg">Kilogramos (kg)</button>
+        <button type="button" class="unit-btn" data-unit="gr">Gramos (g)</button>
+        <button type="button" class="unit-btn hidden" data-unit="100g" id="qmUnit100">Por 100 g</button>
+      </div>
+      <div class="form-field">
+        <label id="qmQtyLabel">Cantidad</label>
+        <div class="qty-row">
+          <button type="button" class="qty-btn" id="qmMinus" title="Disminuir">−</button>
+          <input type="number" id="qmQty" class="qm-qty" min="0" value="1" inputmode="decimal">
+          <button type="button" class="qty-btn" id="qmPlus" title="Aumentar">+</button>
+          <span class="qm-unit" id="qmQtyUnit">kg</span>
+        </div>
+        <div class="hint" id="qmInfo">—</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="qmCancel">Cancelar</button>
+        <button class="btn btn-success" id="qmOk">Agregar al carrito</button>
       </div>
     </div>
   </div>

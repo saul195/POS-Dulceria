@@ -46,11 +46,9 @@
             <th>Barcode</th>
             <th>Producto</th>
             <th>Categoría</th>
-            <th class="num">Costo</th>
             <th class="num">Precio</th>
             <th class="num">Stock</th>
             <th class="num">Mínimo</th>
-            <th class="num">Utilidad</th>
             <th>Estado</th>
             <th></th>
           </tr>
@@ -86,13 +84,14 @@
           <label>Categoría</label>
           <select id="fCategory"></select>
         </div>
-        <div class="form-field">
-          <label>Precio de costo ($)</label>
-          <input type="number" id="fCost" step="0.01" min="0">
-        </div>
-        <div class="form-field">
+        <div class="form-field full">
           <label>Precio de venta ($)</label>
           <input type="number" id="fPrice" step="0.01" min="0">
+        </div>
+        <div class="form-field full" id="price100Wrap">
+          <label>Precio por 100 g ($) <span class="muted">(opcional, solo unidad kg)</span></label>
+          <input type="number" id="fPrice100" step="0.01" min="0">
+          <div class="hint">Si lo defines, en Vender podrás cobrar por paquetes de 100 g con este precio.</div>
         </div>
         <div class="form-field">
           <label>Stock</label>

@@ -80,7 +80,7 @@ app.get('/api/products', (req, res) => {
     params.push(Number(category_id));
   }
   if (lowStock === '1' || lowStock === 'true') {
-    where.push('p.stock <= p.min_stock');
+    where.push('p.stock <= p.min_stock AND p.is_active = 1');
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const count = db.prepare(`SELECT COUNT(*) AS total FROM products p ${whereSql}`).get(...params).total;
@@ -105,11 +105,11 @@ app.post('/api/products/import', (req, res) => {
   const getCat = db.prepare('SELECT id FROM categories WHERE name = ?');
   const getProd = db.prepare('SELECT id FROM products WHERE barcode = ?');
   const insert = db.prepare(
-    `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit, is_active)
+    `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_per_100g, is_active)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const update = db.prepare(
-    `UPDATE products SET name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, is_active = ?
+    `UPDATE products SET name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_per_100g = ?, is_active = ?
      WHERE id = ?`
   );
 
@@ -125,11 +125,11 @@ app.post('/api/products/import', (req, res) => {
       const params = [
         String(r.name).trim(),
         catId,
-        round2(Number(r.cost_price) || 0),
         round2(Number(r.selling_price) || 0),
         Number(r.stock) || 0,
         Number(r.min_stock) || 0,
         String(r.unit || 'pza'),
+        r.price_per_100g != null && r.price_per_100g !== '' ? round2(Number(r.price_per_100g)) : null,
       ];
       if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), existing.id); updated++; }
       else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0)); inserted++; }
@@ -165,17 +165,17 @@ app.post('/api/products', (req, res) => {
   if (!String(b.name || '').trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
   try {
     const info = db.prepare(
-      `INSERT INTO products (barcode, name, category_id, cost_price, selling_price, stock, min_stock, unit, is_active)
+      `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_per_100g, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       String(b.barcode || '').trim() || `GEN-${Date.now()}`,
       String(b.name).trim(),
       b.category_id ? Number(b.category_id) : null,
-      round2(Number(b.cost_price) || 0),
       round2(Number(b.selling_price) || 0),
       Number(b.stock) || 0,
       Number(b.min_stock) || 0,
       String(b.unit || 'pza'),
+      b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
       b.is_active === undefined ? 1 : (b.is_active ? 1 : 0)
     );
     res.status(201).json(db.prepare(`${PRODUCT_SELECT} WHERE p.id = ?`).get(info.lastInsertRowid));
@@ -191,17 +191,17 @@ app.put('/api/products/:id', (req, res) => {
   const b = req.body || {};
   try {
     db.prepare(
-      `UPDATE products SET barcode = ?, name = ?, category_id = ?, cost_price = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, is_active = ?
+      `UPDATE products SET barcode = ?, name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_per_100g = ?, is_active = ?
        WHERE id = ?`
     ).run(
       String(b.barcode ?? p.barcode).trim(),
       String(b.name ?? p.name).trim(),
       b.category_id != null ? Number(b.category_id) : p.category_id,
-      round2(Number(b.cost_price ?? p.cost_price)),
       round2(Number(b.selling_price ?? p.selling_price)),
       Number(b.stock ?? p.stock),
       Number(b.min_stock ?? p.min_stock),
       String(b.unit ?? p.unit),
+      b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
       b.is_active === undefined ? p.is_active : (b.is_active ? 1 : 0),
       p.id
     );
@@ -267,35 +267,38 @@ app.post('/api/sales', (req, res) => {
     }
   }
 
-  const createSale = db.transaction(() => {
-    const getProd = db.prepare('SELECT * FROM products WHERE id = ?');
-    const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
-    const session = db.prepare(`SELECT id FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
-    const saleInfo = db.prepare('INSERT INTO sales (total_amount, payment_method, cash_session_id) VALUES (?, ?, ?)');
-    const insItem = db.prepare(
-      'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, product_name) VALUES (?, ?, ?, ?, ?, ?)'
-    );
+    const createSale = db.transaction(() => {
+      const getProd = db.prepare('SELECT * FROM products WHERE id = ?');
+      const decStock = db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+      const session = db.prepare(`SELECT id FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
+      const saleInfo = db.prepare('INSERT INTO sales (total_amount, payment_method, cash_session_id) VALUES (?, ?, ?)');
+      const insItem = db.prepare(
+        'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, product_name, sale_mode, sale_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      );
 
-    let total = 0;
-    const savedItems = [];
-    for (const it of items) {
-      const p = getProd.get(it.product_id);
-      if (!p) throw new Error(`El producto con id ${it.product_id} ya no existe`);
-      const qty = Number(it.quantity);
-      if (qty > p.stock) throw new Error(`Stock insuficiente de "${p.name}". Disponible: ${p.stock} ${p.unit}`);
-      const subtotal = round2(p.selling_price * qty);
-      decStock.run(qty, p.id);
-      total += subtotal;
-      savedItems.push({ product_id: p.id, quantity: qty, unit_price: p.selling_price, subtotal, product_name: p.name, unit: p.unit, barcode: p.barcode });
-    }
-    total = round2(total);
-    const saleRes = saleInfo.run(total, payment_method, session ? session.id : null);
-    const saleId = saleRes.lastInsertRowid;
-    for (const it of savedItems) {
-      insItem.run(saleId, it.product_id, it.quantity, it.unit_price, it.subtotal, it.product_name);
-    }
-    return { saleId, total, items: savedItems };
-  });
+      let total = 0;
+      const savedItems = [];
+      for (const it of items) {
+        const p = getProd.get(it.product_id);
+        if (!p) throw new Error(`El producto con id ${it.product_id} ya no existe`);
+        const qty = Number(it.quantity);
+        if (qty > p.stock) throw new Error(`Stock insuficiente de "${p.name}". Disponible: ${p.stock} ${p.unit}`);
+        const unitPrice = round2(Number(it.unit_price) || p.selling_price);
+        const saleMode = it.sale_mode === '100g' ? '100g' : 'kg';
+        const salePrice = saleMode === '100g' ? round2(Number(it.sale_price) || p.selling_price) : unitPrice;
+        const subtotal = round2(unitPrice * qty);
+        decStock.run(qty, p.id);
+        total += subtotal;
+        savedItems.push({ product_id: p.id, quantity: qty, unit_price: unitPrice, subtotal, product_name: p.name, unit: p.unit, barcode: p.barcode, sale_mode: saleMode, sale_price: salePrice });
+      }
+      total = round2(total);
+      const saleRes = saleInfo.run(total, payment_method, session ? session.id : null);
+      const saleId = saleRes.lastInsertRowid;
+      for (const it of savedItems) {
+        insItem.run(saleId, it.product_id, it.quantity, it.unit_price, it.subtotal, it.product_name, it.sale_mode, it.sale_price);
+      }
+      return { saleId, total, items: savedItems };
+    });
 
   let result;
   try {
@@ -313,17 +316,9 @@ app.get('/api/reports/today', (req, res) => {
   const start = todayStart();
   const summary = db.prepare(
     `SELECT COUNT(*) AS transactions,
-            COALESCE(SUM(total_amount), 0) AS total_sales,
-            COALESCE(SUM(cost), 0) AS total_cost,
-            COALESCE(SUM(total_amount), 0) - COALESCE(SUM(cost), 0) AS net_profit
-     FROM (
-       SELECT s.total_amount,
-              (SELECT COALESCE(SUM(si.subtotal * (p.cost_price / NULLIF(p.selling_price, 0))), 0)
-               FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
-               WHERE si.sale_id = s.id AND p.selling_price > 0) AS cost
-       FROM sales s
-       WHERE s.created_at >= ?
-     )`
+            COALESCE(SUM(total_amount), 0) AS total_sales
+     FROM sales
+     WHERE created_at >= ?`
   ).get(start);
 
   const top = db.prepare(
@@ -344,7 +339,7 @@ app.get('/api/reports/today', (req, res) => {
   const lowStock = db.prepare(
     `SELECT p.*, c.name AS category_name FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
-     WHERE p.stock <= p.min_stock ORDER BY (p.stock - p.min_stock) ASC`
+     WHERE p.stock <= p.min_stock AND p.is_active = 1 ORDER BY (p.stock - p.min_stock) ASC`
   ).all();
 
   const session = db.prepare(`SELECT * FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
@@ -354,8 +349,6 @@ app.get('/api/reports/today', (req, res) => {
     summary: {
       transactions: summary.transactions,
       total_sales: round2(summary.total_sales),
-      total_cost: round2(summary.total_cost),
-      net_profit: round2(summary.net_profit),
     },
     top_products: top.map((t) => ({ ...t, qty: round2(t.qty) })),
     by_payment_method: byMethod,

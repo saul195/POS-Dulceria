@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS products (
   barcode       TEXT NOT NULL UNIQUE,
   name          TEXT NOT NULL,
   category_id   INTEGER,
-  cost_price    REAL NOT NULL DEFAULT 0,
   selling_price REAL NOT NULL DEFAULT 0,
   stock         REAL NOT NULL DEFAULT 0,
   min_stock     REAL NOT NULL DEFAULT 0,
@@ -80,5 +79,25 @@ if (!productCols.includes('is_active')) {
   console.log('[db] Columna is_active agregada a products');
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active)');
+
+if (!productCols.includes('price_per_100g')) {
+  db.exec('ALTER TABLE products ADD COLUMN price_per_100g REAL');
+  console.log('[db] Columna price_per_100g agregada a products');
+}
+
+if (productCols.includes('cost_price')) {
+  db.exec('ALTER TABLE products DROP COLUMN cost_price');
+  console.log('[db] Columna cost_price eliminada de products');
+}
+
+const saleItemCols = db.prepare("PRAGMA table_info(sale_items)").all().map((c) => c.name);
+if (!saleItemCols.includes('sale_mode')) {
+  db.exec("ALTER TABLE sale_items ADD COLUMN sale_mode TEXT NOT NULL DEFAULT 'kg'");
+  console.log('[db] Columna sale_mode agregada a sale_items');
+}
+if (!saleItemCols.includes('sale_price')) {
+  db.exec('ALTER TABLE sale_items ADD COLUMN sale_price REAL');
+  console.log('[db] Columna sale_price agregada a sale_items');
+}
 
 module.exports = db;

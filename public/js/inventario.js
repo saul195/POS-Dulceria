@@ -83,12 +83,11 @@ function renderTable(products) {
   const tbody = $('tbody');
   tbody.innerHTML = '';
   if (!products.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="muted" style="text-align:center;padding:28px;">Sin productos.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="muted" style="text-align:center;padding:28px;">Sin productos.</td></tr>`;
     return;
   }
   for (const p of products) {
     const low = p.stock <= p.min_stock;
-    const profit = p.selling_price - p.cost_price;
     const active = p.is_active !== 0;
     const tr = document.createElement('tr');
     tr.dataset.low = low ? '1' : '0';
@@ -98,11 +97,9 @@ function renderTable(products) {
       <td class="muted">${p.barcode}</td>
       <td><b>${p.name}</b> <span class="muted">(${p.unit})</span></td>
       <td>${p.category_name || '<span class="muted">—</span>'}</td>
-      <td class="num">${money(p.cost_price)}</td>
-      <td class="num">${money(p.selling_price)}</td>
+      <td class="num">${money(p.selling_price)}${p.unit === 'kg' && p.price_per_100g ? `<div class="muted" style="font-size:12px;">${money(p.price_per_100g)}/100g</div>` : ''}</td>
       <td class="num"><b>${num(p.stock, 2)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
       <td class="num">${num(p.min_stock, 2)}</td>
-      <td class="num ${profit < 0 ? 'muted' : ''}">${money(profit)}</td>
       <td class="num">
         <label class="toggle-label" title="${active ? 'Activo' : 'Inactivo'}">
           <input type="checkbox" class="active-toggle" data-id="${p.id}" ${active ? 'checked' : ''}>
@@ -141,8 +138,8 @@ function openProductModal(product = null) {
   const title = $('modalTitle');
   const form = {
     name: $('fName'), barcode: $('fBarcode'), category: $('fCategory'),
-    cost: $('fCost'), price: $('fPrice'), stock: $('fStock'),
-    minStock: $('fMinStock'), unit: $('fUnit'),
+    price: $('fPrice'), price100: $('fPrice100'),
+    stock: $('fStock'), minStock: $('fMinStock'), unit: $('fUnit'),
   };
   fillSelect(form.category, state.categories);
   if (product) {
@@ -150,8 +147,8 @@ function openProductModal(product = null) {
     form.name.value = product.name;
     form.barcode.value = product.barcode;
     form.category.value = product.category_id || '';
-    form.cost.value = product.cost_price;
     form.price.value = product.selling_price;
+    form.price100.value = product.price_per_100g != null && product.price_per_100g !== '' ? product.price_per_100g : '';
     form.stock.value = product.stock;
     form.minStock.value = product.min_stock;
     form.unit.value = product.unit;
@@ -159,14 +156,22 @@ function openProductModal(product = null) {
   } else {
     title.textContent = 'Nuevo producto';
     form.name.value = ''; form.barcode.value = ''; form.category.value = '';
-    form.cost.value = ''; form.price.value = ''; form.stock.value = ''; form.minStock.value = '';
+    form.price.value = ''; form.price100.value = '';
+    form.stock.value = ''; form.minStock.value = '';
     form.unit.value = 'pza';
     $('productModal').dataset.editingId = '';
   }
+  updatePrice100Visibility();
   $('productModal').classList.add('show');
   renderBarcodePreview();
   setTimeout(() => form.name.focus(), 50);
 }
+
+function updatePrice100Visibility() {
+  $('price100Wrap').classList.toggle('hidden', $('fUnit').value.trim() !== 'kg');
+}
+
+$('fUnit').addEventListener('input', updatePrice100Visibility);
 
 async function saveProduct() {
   const modal = $('productModal');
@@ -175,8 +180,8 @@ async function saveProduct() {
     name: $('fName').value.trim(),
     barcode: $('fBarcode').value.trim(),
     category_id: $('fCategory').value || null,
-    cost_price: parseFloat($('fCost').value) || 0,
     selling_price: parseFloat($('fPrice').value) || 0,
+    price_per_100g: $('fPrice100').value !== '' ? parseFloat($('fPrice100').value) : null,
     stock: parseFloat($('fStock').value) || 0,
     min_stock: parseFloat($('fMinStock').value) || 0,
     unit: $('fUnit').value.trim() || 'pza',

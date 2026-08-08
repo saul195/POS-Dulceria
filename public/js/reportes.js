@@ -12,8 +12,6 @@ async function loadReports() {
     $('reportDate').textContent = `(${r.date})`;
     $('statTotal').textContent = money(r.summary.total_sales);
     $('statCount').textContent = r.summary.transactions;
-    $('statProfit').textContent = money(r.summary.net_profit);
-    $('statCost').textContent = money(r.summary.total_cost);
 
     const top = $('topList');
     top.innerHTML = r.top_products.length

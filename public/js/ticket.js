@@ -4,7 +4,7 @@ const STORE_PHONE = 'Tel: 555-123-4567';
 
 function pad(n, w) { return String(n).padStart(w, '0'); }
 
-function padZ(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function padZ(n) { return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function line(...parts) {
   return parts.map((p) => p || '').join('');
@@ -23,16 +23,18 @@ function renderTicket(sale, opts = {}) {
   for (const it of sale.items) {
     const name = it.product_name || 'Producto';
     const nameShort = name.length > 20 ? name.slice(0, 20) : name;
-    const qty = padZ(it.quantity);
-    const unit = it.unit === 'kg' ? 'kg' : '';
-    const price = padZ(it.unit_price);
+    const is100 = it.sale_mode === '100g' && it.sale_price != null;
+    const qty = is100 ? `${Math.round(it.quantity * 10)}×100g` : (it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : padZ(it.quantity));
+    const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
+    const price = padZ(is100 ? it.sale_price : it.unit_price);
+    const priceUnit = is100 ? '/100g' : (it.unit === 'kg' ? '/kg' : '');
     const subtotal = padZ(it.subtotal);
     let n1 = `${qty}${unit}`;
     let n2 = nameShort;
     let n3 = padZ(it.subtotal);
     if (n1.length + 1 + n2.length > 26) n2 = n2.slice(0, 25 - n1.length);
     rows += `<tr><td>${n1}</td><td>${n2}</td><td class="right">${n3}</td></tr>`;
-    rows += `<tr><td></td><td colspan="2" style="font-size:10px;color:#000;">@ ${price}</td></tr>`;
+    rows += `<tr><td></td><td colspan="2" style="font-size:10px;color:#000;">@ ${price}${priceUnit}</td></tr>`;
   }
 
   const methodLabel = payment === 'efectivo' ? 'EFECTIVO' : payment.toUpperCase();

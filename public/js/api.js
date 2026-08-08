@@ -71,11 +71,6 @@ const money = (n) => {
 };
 const num = (n, d = 2) => Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-const fmtDate = (s) => {
-  const d = new Date(String(s).replace(' ', 'T'));
-  return d.toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
-
 function toast(message, type = 'success') {
   let el = document.getElementById('toast');
   if (!el) {
@@ -88,11 +83,6 @@ function toast(message, type = 'success') {
   el.className = `toast ${type} show`;
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), 2800);
-}
-
-async function loadCategories() {
-  try { return await api.categories.list(); }
-  catch (e) { toast(e.message, 'error'); return []; }
 }
 
 function fillSelect(select, cats, emptyOption = true) {

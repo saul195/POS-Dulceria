@@ -69,6 +69,7 @@ const money = (n) => {
   const v = Number(n || 0);
   return v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 };
+const moneyMX = (n) => `${money(n)} MXN`;
 const num = (n, d = 2) => Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 function toast(message, type = 'success') {

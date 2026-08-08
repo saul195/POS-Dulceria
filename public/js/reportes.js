@@ -10,12 +10,12 @@ async function loadReports() {
   try {
     const r = await api.reports.today();
     $('reportDate').textContent = `(${r.date})`;
-    $('statTotal').textContent = money(r.summary.total_sales);
+    $('statTotal').textContent = moneyMX(r.summary.total_sales);
     $('statCount').textContent = r.summary.transactions;
 
     const top = $('topList');
     top.innerHTML = r.top_products.length
-      ? r.top_products.map((t) => `<li><b>${t.name}</b> — ${num(t.qty)} uds · ${money(t.revenue)}</li>`).join('')
+      ? r.top_products.map((t) => `<li><b>${t.name}</b> — ${num(t.qty)} uds · ${moneyMX(t.revenue)}</li>`).join('')
       : '<li class="muted">Sin ventas hoy.</li>';
 
     const methods = $('methodList');
@@ -23,7 +23,7 @@ async function loadReports() {
       ? r.by_payment_method.map((m) => `
           <div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
             <span><b>${m.method.charAt(0).toUpperCase() + m.method.slice(1)}</b> · ${m.count} venta(s)</span>
-            <span>${money(m.total)}</span>
+            <span>${moneyMX(m.total)}</span>
           </div>`).join('')
       : '<div class="muted">Sin ventas hoy.</div>';
 
@@ -53,7 +53,7 @@ async function loadSales() {
           <td>${String(s.created_at).slice(11, 16)}</td>
           <td><span class="badge badge-ok">${s.payment_method}</span></td>
           <td class="num">${s.items_count}</td>
-          <td class="num"><b>${money(s.total_amount)}</b></td>
+          <td class="num"><b>${moneyMX(s.total_amount)}</b></td>
           <td class="num"><button class="btn btn-outline btn-sm view-btn" data-id="${s.id}">Ver ticket</button></td>
         </tr>`).join('')
       : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px;">Sin ventas registradas hoy.</td></tr>`;
@@ -89,10 +89,10 @@ function renderCash(session) {
         <div>
           <span class="badge badge-ok">CAJA ABIERTA</span>
           <div class="muted" style="margin-top:6px;">
-            Fondo inicial: <b>${money(session.opening_amount)}</b><br>
+            Fondo inicial: <b>${moneyMX(session.opening_amount)}</b><br>
             Apertura: ${session.opening_date}<br>
-            Ventas de hoy en caja: <b>${money(session.today_sales ?? 0)}</b><br>
-            Esperado en caja: <b>${money(session.expected ?? 0)}</b>
+            Ventas de hoy en caja: <b>${moneyMX(session.today_sales ?? 0)}</b><br>
+            Esperado en caja: <b>${moneyMX(session.expected ?? 0)}</b>
           </div>
         </div>
         <button class="btn btn-danger" id="closeCashBtn">Cerrar caja / corte</button>
@@ -100,8 +100,8 @@ function renderCash(session) {
     $('closeCashBtn').addEventListener('click', () => {
       const modal = openModal(`
         <h3>Cerrar caja (corte de turno)</h3>
-        <p class="muted mb">Fondo inicial: ${money(session.opening_amount)} · Ventas de hoy: ${money(session.today_sales ?? 0)}<br>
-        Cantidad esperada: <b>${money(session.expected ?? 0)}</b></p>
+        <p class="muted mb">Fondo inicial: ${moneyMX(session.opening_amount)} · Ventas de hoy: ${moneyMX(session.today_sales ?? 0)}<br>
+        Cantidad esperada: <b>${moneyMX(session.expected ?? 0)}</b></p>
         <div class="form-field mb">
           <label>Cantidad contada en caja ($)</label>
           <input type="number" id="closingAmount" step="0.01" min="0" value="${session.expected ?? 0}">
@@ -116,7 +116,7 @@ function renderCash(session) {
           const r = await api.cash.close({ closing_amount: parseFloat(modal.querySelector('#closingAmount').value) || 0 });
           closeModal(modal.closest('.modal-backdrop'));
           const diff = r.difference;
-          toast(`Caja cerrada. ${diff >= 0 ? 'Sobrante' : 'Faltante'}: ${money(Math.abs(diff))}`, diff >= 0 ? 'success' : 'error');
+          toast(`Caja cerrada. ${diff >= 0 ? 'Sobrante' : 'Faltante'}: ${moneyMX(Math.abs(diff))}`, diff >= 0 ? 'success' : 'error');
           loadReports();
         } catch (e) { toast(e.message, 'error'); }
       });

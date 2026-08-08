@@ -664,3 +664,63 @@ td.num, th.num { text-align: right; }
   background: #fde8e8;
   color: #b3261e;
 }
+
+/* ---------- Responsive ---------- */
+html { -webkit-tap-highlight-color: transparent; }
+
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; gap: 8px; height: auto; padding: 8px 16px; }
+  .topbar .brand { font-size: 16px; }
+  .topbar nav { margin-left: 0; flex-wrap: wrap; gap: 2px; }
+  .topbar nav a { padding: 6px 10px; font-size: 13px; }
+}
+
+@media (max-width: 768px) {
+  .container { padding: 14px; }
+  .card { padding: 14px; }
+  .cart-panel { position: static; }
+  .helpbar { display: none; }
+  .product-grid { max-height: none; }
+  .cart-list { max-height: none; }
+  .stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .modal { padding: 18px; max-width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .topbar { gap: 6px; }
+  .topbar .brand { font-size: 14px; }
+  .topbar nav a { padding: 6px 8px; font-size: 12px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .barcode-row { flex-direction: column; gap: 8px; }
+  .barcode-row .btn { width: 100%; }
+  .product-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .prod-card { padding: 10px; gap: 4px; }
+  .prod-card .prod-price { font-size: 17px; }
+  .modal-actions { flex-direction: column; }
+  .modal-actions .btn { width: 100%; }
+  .modal-actions .btn-lg { padding: 14px; }
+  .unit-toggle { flex-direction: column; }
+  .unit-btn { padding: 12px; }
+  .qty-row .qty-btn { width: 44px; height: 44px; font-size: 20px; }
+  .cart-item .ci-qty .qty-btn { width: 34px; height: 34px; }
+  .cart-item .ci-qty .cart-qty { width: 54px; }
+  .quick-pay .btn { min-width: 60px; padding: 10px 8px; }
+  .card-plus { width: 30px; height: 30px; font-size: 20px; }
+  .toast { left: 12px; right: 12px; bottom: 12px; text-align: center; }
+  .toolbar input[type="search"] { max-width: none; width: 100%; }
+  .toolbar { gap: 8px; }
+  .pagination { flex-wrap: wrap; }
+  th, td { padding: 8px 8px; font-size: 13px; }
+  .help-table td { font-size: 13px; }
+  .wa-wrap { padding: 20px 12px; }
+  .wa-card { padding: 24px 16px; }
+  .barcode-label { width: 58mm; }
+}
+
+@media (max-width: 420px) {
+  .container { padding: 10px; }
+  .card { padding: 12px; }
+  .product-grid { grid-template-columns: repeat(2, 1fr); }
+  .cart-total-row .val { font-size: 22px; }
+  .topbar nav a { padding: 5px 6px; font-size: 11px; }
+}

@@ -8,6 +8,7 @@ let state = {
   lowStock: false,
   totalPages: 1,
   categories: [],
+  botes: [],
 };
 
 /* ---------------- Carga de listas ---------------- */
@@ -16,6 +17,50 @@ async function loadCategories() {
   state.categories = await api.categories.list();
   fillSelect($('fCategory'), state.categories);
   renderCatPills();
+  loadBotes();
+}
+
+const HELADOS_CAT_NAME = 'Helados';
+
+function isHeladosCat(catId) {
+  const cat = state.categories.find((c) => String(c.id) === String(catId));
+  return !!cat && cat.name.trim().toLowerCase() === HELADOS_CAT_NAME.toLowerCase();
+}
+
+async function loadBotes() {
+  try {
+    let page = 1;
+    const all = [];
+    let total = Infinity;
+    while (all.length < total) {
+      const data = await api.products.list({ page, pageSize: 100 });
+      all.push(...data.products);
+      total = data.total;
+      if (!data.products.length) break;
+      page++;
+    }
+    state.botes = all.filter((p) => p.is_bote);
+    for (const sel of [$('fRecipeBote'), $('fRecipeBote2')]) {
+      sel.innerHTML = '';
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = '— Sin bote —';
+      sel.appendChild(o);
+      for (const b of state.botes) {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = `${b.name} (${num(b.stock, 2)} kg)`;
+        sel.appendChild(opt);
+      }
+    }
+  } catch (e) { /* el selector de botes quedará vacío */ }
+}
+
+function updateRecipeVisibility() {
+  const isHelados = isHeladosCat($('fCategory').value);
+  const isBote = $('fIsBote').checked;
+  document.querySelectorAll('.recipe-wrap').forEach((el) => el.classList.toggle('hidden', !isHelados));
+  document.querySelectorAll('.recipe-helado-wrap').forEach((el) => el.classList.toggle('hidden', !(isHelados && !isBote)));
 }
 
 function renderCatPills() {
@@ -89,13 +134,18 @@ function renderTable(products) {
   for (const p of products) {
     const low = p.stock <= p.min_stock;
     const active = p.is_active !== 0;
+    const recipeNote = p.is_bote
+      ? '<span class="badge" style="background:#fff3e0;color:#b36b00;">bote de helado</span>'
+      : p.recipe_grams > 0
+        ? `<span class="badge" style="background:#e8f5e9;color:#2e7d32;">${p.recipe_grams} g${p.recipe_grams2 > 0 ? ` + ${p.recipe_grams2} g` : ''} de bote</span>`
+        : '';
     const tr = document.createElement('tr');
     tr.dataset.low = low ? '1' : '0';
     if (!active) tr.style.opacity = '0.55';
     if (low) tr.style.background = 'var(--danger-bg)';
     tr.innerHTML = `
       <td class="muted">${p.barcode}</td>
-      <td><b>${p.name}</b> <span class="muted">(${p.unit})</span></td>
+      <td><b>${p.name}</b> <span class="muted">(${p.unit})</span> ${recipeNote}</td>
       <td>${p.category_name || '<span class="muted">—</span>'}</td>
       <td class="num">${money(p.selling_price)}${p.unit === 'kg' && p.price_per_100g ? `<div class="muted" style="font-size:12px;">${money(p.price_per_100g)}/100g</div>` : ''}</td>
       <td class="num"><b>${num(p.stock, 2)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
@@ -132,9 +182,137 @@ function renderPagination(total) {
   btn('Sig ›', state.page + 1, state.page === state.totalPages);
 }
 
+/* ---------------- Entrada de mercancía ---------------- */
+
+let entryProducts = [];
+let entryProductId = '';
+
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+async function openEntryModal() {
+  let products;
+  try {
+    products = await fetchAllProducts();
+  } catch (e) {
+    return toast(e.message, 'error');
+  }
+  entryProducts = products;
+  entryProductId = '';
+  $('entrySearch').value = '';
+  $('entrySuggestions').innerHTML = '';
+  $('entryNewStock').value = '';
+  $('entryReason').value = '';
+  updateEntryStockInfo();
+  $('entryModal').classList.add('show');
+  setTimeout(() => $('entrySearch').focus(), 50);
+}
+
+function selectedEntryProduct() {
+  return entryProducts.find((p) => String(p.id) === String(entryProductId)) || null;
+}
+
+function renderEntrySuggestions() {
+  const box = $('entrySuggestions');
+  const q = $('entrySearch').value.trim();
+  if (!q) { box.innerHTML = ''; return; }
+  const lq = q.toLowerCase();
+  const exactCode = entryProducts.find((p) => p.barcode && p.barcode.trim().toLowerCase() === lq);
+  if (exactCode) return selectEntryProduct(exactCode);
+  const matches = entryProducts
+    .filter((p) => p.name.toLowerCase().includes(lq) || (p.barcode && p.barcode.toLowerCase().includes(lq)))
+    .slice(0, 8);
+  box.innerHTML = matches.length
+    ? matches.map((p) => `
+        <button type="button" class="suggest-item" data-id="${p.id}">
+          <b>${p.name}</b> <span class="muted">(${num(p.stock, 2)} ${p.unit}${p.barcode ? ' · ' + p.barcode : ''})</span>
+        </button>`).join('')
+    : `<div class="muted" style="padding:8px 4px;">Sin coincidencias.</div>`;
+  box.querySelectorAll('.suggest-item').forEach((b) => {
+    b.addEventListener('click', () => {
+      const p = entryProducts.find((x) => String(x.id) === b.dataset.id);
+      if (p) selectEntryProduct(p);
+    });
+  });
+}
+
+function selectEntryProduct(p) {
+  entryProductId = String(p.id);
+  $('entrySearch').value = p.name;
+  $('entrySuggestions').innerHTML = '';
+  updateEntryStockInfo();
+  $('entryNewStock').focus();
+}
+
+function updateEntryStockInfo() {
+  const p = selectedEntryProduct();
+  $('entryCurrentStock').value = p ? r2(p.stock) : '';
+  updateEntryCalc();
+}
+
+function updateEntryCalc() {
+  const p = selectedEntryProduct();
+  const qty = r2(parseFloat($('entryNewStock').value));
+  const current = p ? r2(p.stock) : 0;
+  const hint = $('entryCalc');
+  if (!(qty > 0)) {
+    hint.textContent = `Se suman: 0 · escribe cuánto llega${p ? ` (${p.unit})` : ''}`;
+    hint.style.color = 'var(--danger)';
+  } else {
+    hint.textContent = `Se suman ${num(qty, 2)} ${p ? p.unit : ''} → quedará ${num(current + qty, 2)} ${p ? p.unit : ''}`;
+    hint.style.color = '';
+  }
+}
+
+function confirmEntryProduct() {
+  const q = $('entrySearch').value.trim();
+  if (!q) return;
+  const lq = q.toLowerCase();
+  const exactCode = entryProducts.find((p) => p.barcode && p.barcode.trim().toLowerCase() === lq);
+  const target = exactCode || entryProducts.find((p) => p.name.toLowerCase() === lq);
+  if (target) return selectEntryProduct(target);
+  const matches = entryProducts.filter((p) => p.name.toLowerCase().includes(lq) || (p.barcode && p.barcode.toLowerCase().includes(lq)));
+  if (matches.length === 1) return selectEntryProduct(matches[0]);
+  if (matches.length > 1) return toast(`Varios productos coinciden con "${q}". Elige uno de la lista.`, 'error');
+  toast('Producto no encontrado.', 'error');
+}
+
+async function saveStockEntry() {
+  const p = selectedEntryProduct();
+  if (!p) return toast('Selecciona un producto', 'error');
+  const quantity = r2(parseFloat($('entryNewStock').value));
+  if (!(quantity > 0)) return toast('Escribe la cantidad que llega (mayor a 0)', 'error');
+  try {
+    const r = await api.stock.entry({
+      product_id: p.id,
+      quantity,
+      reason: $('entryReason').value.trim(),
+    });
+    $('entryModal').classList.remove('show');
+    toast(`Entrada registrada. Stock actual: ${num(r.stock, 2)}`);
+    loadProducts();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+$('entryBtn').addEventListener('click', openEntryModal);
+$('entrySearch').addEventListener('input', renderEntrySuggestions);
+$('entrySearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmEntryProduct(); }
+});
+$('entryNewStock').addEventListener('input', updateEntryCalc);
+$('entryNewStock').addEventListener('blur', () => {
+  const v = $('entryNewStock');
+  if (v.value !== '') v.value = r2(parseFloat(v.value));
+  updateEntryCalc();
+});
+$('entrySave').addEventListener('click', saveStockEntry);
+$('entryCancel').addEventListener('click', () => $('entryModal').classList.remove('show'));
+
 /* ---------------- CRUD de productos ---------------- */
 
-function openProductModal(product = null) {
+async function openProductModal(product = null) {
+  await loadBotes();
   const title = $('modalTitle');
   const form = {
     name: $('fName'), barcode: $('fBarcode'), category: $('fCategory'),
@@ -152,6 +330,11 @@ function openProductModal(product = null) {
     form.stock.value = product.stock;
     form.minStock.value = product.min_stock;
     form.unit.value = product.unit;
+    $('fIsBote').checked = !!product.is_bote;
+    $('fRecipeBote').value = product.recipe_bote_id || '';
+    $('fRecipeGrams').value = product.recipe_grams || '';
+    $('fRecipeBote2').value = product.recipe_bote_id2 || '';
+    $('fRecipeGrams2').value = product.recipe_grams2 || '';
     $('productModal').dataset.editingId = product.id;
   } else {
     title.textContent = 'Nuevo producto';
@@ -159,9 +342,15 @@ function openProductModal(product = null) {
     form.price.value = ''; form.price100.value = '';
     form.stock.value = ''; form.minStock.value = '';
     form.unit.value = 'pza';
+    $('fIsBote').checked = false;
+    $('fRecipeBote').value = '';
+    $('fRecipeGrams').value = '';
+    $('fRecipeBote2').value = '';
+    $('fRecipeGrams2').value = '';
     $('productModal').dataset.editingId = '';
   }
   updatePrice100Visibility();
+  updateRecipeVisibility();
   $('productModal').classList.add('show');
   renderBarcodePreview();
   setTimeout(() => form.name.focus(), 50);
@@ -172,6 +361,8 @@ function updatePrice100Visibility() {
 }
 
 $('fUnit').addEventListener('input', updatePrice100Visibility);
+$('fCategory').addEventListener('change', updateRecipeVisibility);
+$('fIsBote').addEventListener('change', updateRecipeVisibility);
 
 async function saveProduct() {
   const modal = $('productModal');
@@ -185,9 +376,27 @@ async function saveProduct() {
     stock: parseFloat($('fStock').value) || 0,
     min_stock: parseFloat($('fMinStock').value) || 0,
     unit: $('fUnit').value.trim() || 'pza',
+    is_bote: $('fIsBote').checked ? 1 : 0,
+    recipe_grams: $('fRecipeGrams').value !== '' ? parseFloat($('fRecipeGrams').value) || 0 : 0,
+    recipe_bote_id: $('fRecipeBote').value ? Number($('fRecipeBote').value) : null,
+    recipe_grams2: $('fRecipeGrams2').value !== '' ? parseFloat($('fRecipeGrams2').value) || 0 : 0,
+    recipe_bote_id2: $('fRecipeBote2').value ? Number($('fRecipeBote2').value) : null,
   };
   if (!body.name) return toast('El nombre es obligatorio', 'error');
   if (!body.barcode) return toast('El código de barras es obligatorio', 'error');
+  if (body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2)) {
+    return toast('Un bote de helado no puede tener receta (descuenta de sí mismo).', 'error');
+  }
+  if (body.recipe_bote_id2 && !(body.recipe_grams2 > 0)) {
+    return toast('Indica los gramos del 2º bote.', 'error');
+  }
+  if (!body.is_bote && isHeladosCat(body.category_id) && (!body.recipe_bote_id || !(body.recipe_grams > 0))) {
+    return toast('Indica el bote del que descuenta y los gramos por pieza.', 'error');
+  }
+  if (!body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2)) {
+    body.stock = 0;
+    body.min_stock = 0;
+  }
   try {
     if (id) await api.products.update(id, body);
     else await api.products.create(body);
@@ -372,7 +581,7 @@ function printBarcodeLabel() {
   }
   holder.innerHTML = `
     <div id="barcodePrint" class="barcode-label">
-      <div class="bl-brand">POS DULCERÍA</div>
+      <div class="bl-brand">VILLA ALEGRE</div>
       <svg id="barcodePrintSvg"></svg>
       <div class="bl-code">${code}</div>
     </div>`;
@@ -406,7 +615,18 @@ async function fetchAllProducts() {
 
 const pdfSanitize = (s) => String(s == null ? '' : s).replace(/[^\x00-\xFF]/g, '?');
 
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
 async function exportBarcodes() {
+  if (!window.jspdf) await loadScript('vendor/jspdf.umd.min.js');
   let products;
   try {
     products = await fetchAllProducts();
@@ -428,9 +648,23 @@ async function exportBarcodes() {
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 12;
   const usable = pageW - margin * 2;
+  const gap = 3;
 
   const canvas = document.createElement('canvas');
   let firstCat = true;
+
+  const categoryLayout = (n, contentArea) => {
+    let cols = 1;
+    for (let c = 1; c <= 4; c++) {
+      const rows = Math.ceil(n / c);
+      const boxH = (contentArea - gap * (rows - 1)) / rows;
+      if (boxH >= 24 || c === 4) { cols = c; break; }
+    }
+    const rows = Math.ceil(n / cols);
+    const boxH = Math.min((contentArea - gap * (rows - 1)) / rows, 60);
+    const labelW = (usable - gap * (cols - 1)) / cols;
+    return { cols, boxH, labelW };
+  };
 
   for (const [cat, list] of Object.entries(groups)) {
     list.sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -453,45 +687,48 @@ async function exportBarcodes() {
     y += 5;
     const contentTop = y + 10;
     const contentArea = pageH - margin - contentTop;
-    const gap = 3;
-    const ideal = (contentArea - gap * (list.length - 1)) / list.length;
-    const boxH = ideal < 26 ? 26 : Math.min(80, ideal);
 
-    y = contentTop;
-    for (const p of list) {
+    const { cols, boxH, labelW } = categoryLayout(list.length, contentArea);
+    const codeH = 5;
+
+    list.forEach((p, i) => {
       const code = String(p.barcode).trim();
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = margin + col * (labelW + gap);
+      const yBox = contentTop + row * (boxH + gap);
 
       doc.setDrawColor(170);
       doc.setLineWidth(0.3);
-      doc.roundedRect(margin, y, usable, boxH, 2, 2);
+      doc.roundedRect(x, yBox, labelW, boxH, 2, 2);
 
-      const nameFont = boxH < 32 ? 10 : 12;
+      const nameFont = boxH < 28 ? 8.5 : boxH < 40 ? 10 : 12;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(nameFont);
-      const nameLines = doc.splitTextToSize(pdfSanitize(p.name), usable - 16);
-      const nameH = nameLines.length * (nameFont === 12 ? 5 : 4);
-      doc.text(nameLines, pageW / 2, y + Math.min(8, boxH * 0.25), { align: 'center' });
+      const nameLines = doc.splitTextToSize(pdfSanitize(p.name), labelW - 10);
+      const shown = nameLines.slice(0, 2);
+      const nameH = shown.length * (nameFont <= 9 ? 3.5 : 5);
+      doc.text(shown, x + labelW / 2, yBox + 5 + nameH - (nameFont <= 9 ? 3 : 5), { align: 'center' });
 
-      const barcodeH = Math.max(6, Math.min(22, boxH - nameH - 15));
-      const barcodeTop = y + nameH + 8;
+      const barcodeH = Math.max(6, Math.min(20, boxH - nameH - codeH - 6));
+      const barcodeTop = yBox + 5 + nameH + 1;
       try {
-        JsBarcode(canvas, code, { format: 'CODE128', width: 2, height: 90, displayValue: false, margin: 0 });
+        JsBarcode(canvas, code, { format: 'CODE128', width: 2, height: 40, displayValue: false, margin: 0 });
         const img = canvas.toDataURL('image/png');
-        const maxW = usable - 16;
         const aspect = canvas.width / canvas.height;
+        const maxW = labelW - 10;
         let w = maxW;
         let h = w / aspect;
         if (h > barcodeH) { h = barcodeH; w = h * aspect; }
-        doc.addImage(img, 'PNG', pageW / 2 - w / 2, barcodeTop, w, h);
+        if (w > maxW) { w = maxW; h = w / aspect; }
+        doc.addImage(img, 'PNG', x + labelW / 2 - w / 2, barcodeTop, w, h);
       } catch (e) { /* sin barras */ }
 
-      const codeFont = boxH < 35 ? 9 : boxH < 50 ? 11 : 13;
+      const codeFont = boxH < 28 ? 8 : boxH < 40 ? 10 : 12;
       doc.setFont('courier', 'bold');
       doc.setFontSize(codeFont);
-      doc.text(pdfSanitize(code), pageW / 2, y + boxH - 3, { align: 'center' });
-
-      y += boxH + gap;
-    }
+      doc.text(pdfSanitize(code), x + labelW / 2, yBox + boxH - 3, { align: 'center' });
+    });
   }
 
   const date = new Date().toISOString().slice(0, 10);

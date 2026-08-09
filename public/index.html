@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POS Dulcería · Centro de Cobro</title>
+  <title>Villa Alegre · Centro de Cobro</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="cup">☕</span> POS Dulcería</div>
+    <div class="brand"><span class="cup">☕</span> Villa Alegre</div>
+    <div class="printer-box">
+      <button class="btn-printer" id="printerBtn" title="Registrar la impresora de tickets">
+        <span class="printer-dot" id="printerDot"></span>
+        <span>🖨️</span>
+        <span id="printerLabel">Registrar impresora</span>
+      </button>
+    </div>
     <nav>
       <a href="index.html" class="active">Vender</a>
       <a href="inventario.html">Inventario</a>
@@ -139,8 +146,33 @@
     </div>
   </div>
 
+  <div id="printerModal" class="modal-backdrop">
+    <div class="modal">
+      <h3>🖨️ Impresora de tickets</h3>
+      <div class="form-field mb">
+        <label for="printerNameInput">Nombre de la impresora (como está instalada en Windows)</label>
+        <input type="text" id="printerNameInput" list="printerList" placeholder="Ej: 80mm Series Printer" autocomplete="off">
+        <datalist id="printerList"></datalist>
+        <div class="hint">Se detectan automáticamente las impresoras instaladas; elige una o escríbela exacta.</div>
+      </div>
+      <div class="form-field">
+        <label>Ancho del papel</label>
+        <div class="unit-toggle" id="printerWidth">
+          <button type="button" class="unit-btn" data-mm="58">58 mm</button>
+          <button type="button" class="unit-btn" data-mm="80">80 mm</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="printerModalClose">Cancelar</button>
+        <button class="btn btn-outline" id="printerTestBtn">Probar impresión</button>
+        <button class="btn btn-success" id="printerSaveBtn">Guardar y probar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/api.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/printer.js"></script>
   <script src="js/ticket.js"></script>
   <script src="js/pos.js"></script>
 </body>

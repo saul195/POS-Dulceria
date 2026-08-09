@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POS Dulcería · Reportes</title>
+  <title>Villa Alegre · Reportes</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="cup">☕</span> POS Dulcería</div>
+    <div class="brand"><span class="cup">☕</span> Villa Alegre</div>
     <nav>
       <a href="index.html">Vender</a>
       <a href="inventario.html">Inventario</a>
@@ -31,46 +31,117 @@
       </div>
     </div>
 
-    <div class="pos-wrap">
-      <div class="card">
-        <h2>Transacciones del día</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th># Ticket</th>
-                <th>Hora</th>
-                <th>Método</th>
-                <th class="num">Artículos</th>
-                <th class="num">Total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="salesBody"></tbody>
-          </table>
+    <div class="report-grid">
+      <div class="report-main">
+        <div class="card" id="salesCard">
+          <div class="card-head">
+            <h2 style="margin:0;">Transacciones del día</h2>
+            <label class="toggle-label" title="Mostrar u ocultar las transacciones del día">
+              <input type="checkbox" id="salesToggle" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Activa</span>
+            </label>
+          </div>
+          <div id="salesContent">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th># Ticket</th>
+                    <th>Hora</th>
+                    <th>Método</th>
+                    <th class="num">Artículos</th>
+                    <th class="num">Total</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="salesBody"></tbody>
+              </table>
+            </div>
+            <div class="pagination" id="salesPagination"></div>
+          </div>
         </div>
-        <div class="pagination" id="salesPagination"></div>
+
+        <div class="card mt" id="periodCard">
+          <div class="card-head">
+            <h2 style="margin:0;">Ventas por período</h2>
+            <label class="toggle-label" title="Mostrar u ocultar la gráfica de ventas por período">
+              <input type="checkbox" id="periodToggle" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Activa</span>
+            </label>
+          </div>
+          <div id="periodBody">
+            <div class="seg">
+              <button class="btn btn-sm seg-btn active" data-mode="week">Semana</button>
+              <button class="btn btn-sm seg-btn" data-mode="month">Mes</button>
+              <button class="btn btn-sm seg-btn" data-mode="year">Año</button>
+            </div>
+            <div class="chart-controls" id="chartControls" style="display:none;">
+              <select id="chartMonth" style="width:auto;"></select>
+              <select id="chartYear" style="width:auto;"></select>
+              <button class="btn btn-sm btn-outline" id="chartGo">Ver</button>
+            </div>
+            <div class="chart-meta" id="chartMeta">Cargando…</div>
+            <div class="chart-wrap" id="chartWrap"></div>
+          </div>
+        </div>
+
+        <div class="card mt" id="stockCard">
+          <div class="card-head">
+            <h2 style="margin:0;">Entradas y Salidas de Productos</h2>
+            <label class="toggle-label" title="Mostrar u ocultar movimientos de stock">
+              <input type="checkbox" id="stockToggle" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Activa</span>
+            </label>
+          </div>
+          <div id="stockContent">
+            <div class="stock-cats" id="stockCats"></div>
+            <div class="product-grid stock-products" id="stockProducts"></div>
+            <div id="stockProductInfo"></div>
+            <div class="table-wrap mt">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>Producto</th>
+                    <th class="num">Entrada</th>
+                    <th class="num">Salida</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody id="stockBody"></tbody>
+              </table>
+            </div>
+            <div class="pagination" id="stockPagination"></div>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <div class="card mb">
-          <h2>Top 5 más vendidos</h2>
-          <ol id="topList" style="padding-left:20px;line-height:2;"></ol>
-        </div>
-        <div class="card mb">
-          <h2>Métodos de pago</h2>
-          <div id="methodList"></div>
-        </div>
+      <aside class="report-side">
         <div class="card">
+          <h2>Top 5 más vendidos</h2>
+          <div id="topList"></div>
+        </div>
+        <div class="card mt">
           <h2>Stock bajo</h2>
           <div id="lowStockList" class="muted">Cargando…</div>
         </div>
-      </div>
-    </div>
-
-    <div class="card mt">
-      <h2>Apertura y Cierre de Caja</h2>
-      <div id="cashBox"></div>
+        <div class="card mt" id="cashCard">
+          <div class="card-head">
+            <h2 style="margin:0;">Apertura y Cierre de Caja</h2>
+            <label class="toggle-label" title="Mostrar u ocultar la caja">
+              <input type="checkbox" id="cashToggle" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Activa</span>
+            </label>
+          </div>
+          <div id="cashContent">
+            <div id="cashBox"></div>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 

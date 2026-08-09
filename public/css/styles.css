@@ -61,6 +61,39 @@ body {
 .topbar .brand .cup {
   color: #ffd9a8;
 }
+.printer-box { display: flex; align-items: center; }
+.btn-printer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btn-printer:hover { background: rgba(255,255,255,.28); }
+.btn-printer:disabled { opacity: .5; cursor: not-allowed; }
+.btn-printer .printer-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a623;
+  flex-shrink: 0;
+}
+.btn-printer.connected {
+  background: rgba(76,175,80,.22);
+  border-color: #4caf50;
+}
+.btn-printer.connected .printer-dot { background: #4caf50; }
+@media (max-width: 640px) {
+  .btn-printer #printerLabel { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+}
 .topbar nav { display: flex; gap: 4px; margin-left: auto; }
 .topbar nav a {
   color: #e8f1fb;
@@ -79,6 +112,18 @@ body {
 .pos-wrap { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
 @media (max-width: 1000px) { .pos-wrap { grid-template-columns: 1fr; } }
 
+.report-grid { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; margin-top: 20px; }
+@media (max-width: 1000px) { .report-grid { grid-template-columns: 1fr; } }
+.report-main { min-width: 0; }
+.top-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.top-row:last-child { border-bottom: none; }
+.top-rank {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.top-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-meta { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
 .pos-layout { display: grid; grid-template-columns: 1fr 400px; gap: 20px; align-items: start; }
 @media (max-width: 1000px) { .pos-layout { grid-template-columns: 1fr; } }
 
@@ -91,6 +136,9 @@ body {
 }
 .card h2 { font-size: 16px; margin-bottom: 12px; color: var(--primary-dark); }
 .card h3 { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.card-head h2 { margin: 0; }
+.card-head .toggle-label { margin: 0; }
 
 /* ---------- Inputs ---------- */
 input, select, button {
@@ -169,6 +217,7 @@ td.num, th.num { text-align: right; }
 .badge-low { background: var(--danger-bg); color: var(--danger); }
 .badge-warn { background: var(--warning-bg); color: var(--warning); }
 .badge-ok { background: var(--success-bg); color: var(--success); }
+.badge-recipe { background: #e3f2fd; color: #1565c0; margin-left: 4px; }
 .alert {
   padding: 10px 14px;
   border-radius: 8px;
@@ -243,6 +292,43 @@ td.num, th.num { text-align: right; }
 .stat .label { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; }
 .stat .value { font-size: 24px; font-weight: 800; margin-top: 6px; color: var(--primary-dark); }
 
+/* ---------- Gráficas de ventas ---------- */
+.seg { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.seg-btn { cursor: pointer; }
+.seg-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.chart-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.chart-controls select { width: auto; }
+.chart-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+.chart-wrap { overflow-x: auto; }
+.barchart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 220px;
+  padding: 8px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 4px;
+}
+.bar-val { font-size: 10px; color: var(--text-muted); font-weight: 700; white-space: nowrap; }
+.bar-fill {
+  width: 70%;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--primary);
+  transition: height .3s ease;
+}
+.bar-fill.zero { background: var(--border); }
+.bar-lbl { font-size: 10px; color: var(--text-muted); text-transform: capitalize; text-align: center; }
+.chart-empty { text-align: center; color: var(--text-muted); padding: 40px 0; }
+
 /* ---------- Modal ---------- */
 .modal-backdrop {
   position: fixed;
@@ -269,6 +355,9 @@ td.num, th.num { text-align: right; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-field label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+.checkbox-line { display: flex !important; align-items: center; gap: 8px; font-size: 14px !important; color: var(--text) !important; font-weight: 700 !important; }
+.checkbox-line input[type="checkbox"] { width: 18px; height: 18px; }
+.recipe-wrap, .recipe-helado-wrap { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; background: #fffdf9; }
 .barcode-gen-row { display: flex; gap: 8px; }
 .barcode-gen-row input { flex: 1; }
 .barcode-gen-row .btn { white-space: nowrap; }
@@ -343,11 +432,18 @@ td.num, th.num { text-align: right; }
   text-align: center;
   margin: 2px 0;
 }
+.ticket .t-logo { margin: 2px 0 4px; }
+.ticket .t-logo-img { width: 32mm; max-width: 32mm; height: auto; }
 .ticket .t-name { font-size: 15px; font-weight: bold; text-transform: uppercase; }
 .ticket .t-sep { border-top: 1px dashed #000; margin: 6px 0; }
 .ticket table { width: 100%; border-collapse: collapse; }
 .ticket td { padding: 0; font-size: 12px; border: none; }
 .ticket .right { text-align: right; white-space: nowrap; }
+.ticket .t-meta td { padding: 1px 0; }
+.ticket .t-items .w-qty { width: 26%; }
+.ticket .t-items .w-cost { width: 30%; }
+.ticket .t-items td { padding: 1px 0; }
+.ticket .t-totals td { padding: 2px 0; }
 .ticket .ttotal td { border-top: 1px dashed #000; padding-top: 6px; font-weight: bold; }
 
 /* ---------- Catálogo (Vender) ---------- */
@@ -515,6 +611,50 @@ td.num, th.num { text-align: right; }
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
 .toolbar input[type="search"] { max-width: 320px; }
 .hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+/* ---------- Entradas y salidas de stock ---------- */
+.suggest-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.suggest-item {
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+.suggest-item:hover { background: #fbf6f0; }
+.stock-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.stock-cat, .stock-prod { margin: 0; }
+.stock-cat .prod-count, .stock-prod .prod-count { font-size: 20px; font-weight: 800; color: var(--coffee-dark); }
+.stock-cat .prod-meta, .stock-prod .prod-meta { font-size: 11px; color: var(--text-muted); }
+.stock-cat.active, .stock-prod.active { border-color: var(--coffee); background: var(--coffee-light); }
+.stock-cat.active .prod-name, .stock-prod.active .prod-name { color: var(--coffee-dark); }
+.stock-products { margin: 12px 0 4px; }
+.product-stock-info {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  background: #fffdf9;
+}
+.psi-head { margin-bottom: 8px; }
+.psi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.psi-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: center;
+  background: #fff;
+}
+.psi-box .label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+.psi-box .value { font-size: 18px; font-weight: 800; margin-top: 2px; }
+.ok { color: var(--success); }
+.err { color: var(--danger); }
 .helpbar {
   display: flex;
   gap: 18px;

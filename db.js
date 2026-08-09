@@ -90,6 +90,28 @@ if (productCols.includes('cost_price')) {
   console.log('[db] Columna cost_price eliminada de products');
 }
 
+if (!productCols.includes('is_bote')) {
+  db.exec('ALTER TABLE products ADD COLUMN is_bote INTEGER NOT NULL DEFAULT 0');
+  console.log('[db] Columna is_bote agregada a products');
+}
+if (!productCols.includes('recipe_grams')) {
+  db.exec('ALTER TABLE products ADD COLUMN recipe_grams REAL NOT NULL DEFAULT 0');
+  console.log('[db] Columna recipe_grams agregada a products');
+}
+if (!productCols.includes('recipe_bote_id')) {
+  db.exec('ALTER TABLE products ADD COLUMN recipe_bote_id INTEGER');
+  console.log('[db] Columna recipe_bote_id agregada a products');
+}
+if (!productCols.includes('recipe_grams2')) {
+  db.exec('ALTER TABLE products ADD COLUMN recipe_grams2 REAL NOT NULL DEFAULT 0');
+  console.log('[db] Columna recipe_grams2 agregada a products');
+}
+if (!productCols.includes('recipe_bote_id2')) {
+  db.exec('ALTER TABLE products ADD COLUMN recipe_bote_id2 INTEGER');
+  console.log('[db] Columna recipe_bote_id2 agregada a products');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_products_recipe_bote ON products(recipe_bote_id)');
+
 const saleItemCols = db.prepare("PRAGMA table_info(sale_items)").all().map((c) => c.name);
 if (!saleItemCols.includes('sale_mode')) {
   db.exec("ALTER TABLE sale_items ADD COLUMN sale_mode TEXT NOT NULL DEFAULT 'kg'");
@@ -99,5 +121,40 @@ if (!saleItemCols.includes('sale_price')) {
   db.exec('ALTER TABLE sale_items ADD COLUMN sale_price REAL');
   console.log('[db] Columna sale_price agregada a sale_items');
 }
+
+const saleCols = db.prepare('PRAGMA table_info(sales)').all().map((c) => c.name);
+if (!saleCols.includes('ticket_no')) {
+  db.exec('ALTER TABLE sales ADD COLUMN ticket_no INTEGER');
+  console.log('[db] Columna ticket_no agregada a sales');
+}
+db.exec(`
+  UPDATE sales SET ticket_no = (
+    SELECT COUNT(*) FROM sales s2
+    WHERE date(s2.created_at) = date(sales.created_at) AND s2.id <= sales.id
+  )
+  WHERE ticket_no IS NULL;
+`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  type       TEXT NOT NULL CHECK (type IN ('entrada', 'salida')),
+  quantity   REAL NOT NULL,
+  reason     TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_mov_product   ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_mov_created   ON stock_movements(created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_ticket  ON sales(ticket_no);
+`);
+
+db.exec(`
+  UPDATE products SET stock = round(stock, 2), min_stock = round(min_stock, 2);
+  UPDATE stock_movements SET quantity = round(quantity, 2);
+  UPDATE sale_items SET quantity = round(quantity, 2), subtotal = round(subtotal, 2);
+`);
 
 module.exports = db;

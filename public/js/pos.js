@@ -2,6 +2,16 @@ const cart = new Map(); // product_id -> { product, quantity }
 let lastSale = null;
 let lastPayment = null;
 
+const hasRecipe = (p) => !!(p && ((p.recipe_bote_id && p.recipe_grams > 0) || (p.recipe_bote_id2 && p.recipe_grams2 > 0)));
+const recipeTotalGrams = (p) => {
+  if (!p) return 0;
+  return (p.recipe_grams > 0 ? p.recipe_grams : 0) + (p.recipe_grams2 > 0 ? p.recipe_grams2 : 0);
+};
+const recipeBoteCount = (p) => {
+  if (!p) return 0;
+  return ((p.recipe_bote_id && p.recipe_grams > 0) ? 1 : 0) + ((p.recipe_bote_id2 && p.recipe_grams2 > 0) ? 1 : 0);
+};
+
 let allProducts = [];
 let categories = [];
 let activeCategory = localStorage.getItem('pos_cat') || '';
@@ -37,7 +47,7 @@ async function fetchAllProducts() {
     if (!data.products.length) break;
     page++;
   }
-  return all.filter((p) => p.is_active !== 0);
+  return all.filter((p) => p.is_active !== 0 && !p.is_bote);
 }
 
 function renderCatPills() {
@@ -81,7 +91,8 @@ function renderGrid() {
     return;
   }
   for (const p of list) {
-    const out = p.stock <= 0;
+    const hasRecipe = p.recipe_bote_id && p.recipe_grams > 0 || p.recipe_bote_id2 && p.recipe_grams2 > 0;
+    const out = !hasRecipe && p.stock <= 0;
     const card = document.createElement('button');
     const isKg = p.unit === 'kg';
     card.className = `prod-card${cart.has(p.id) ? ' in-cart' : ''}`;
@@ -92,9 +103,12 @@ function renderGrid() {
       <div class="prod-name">${p.name}</div>
       <div class="prod-price">${money(p.selling_price)}</div>
       <div class="prod-meta">${isKg ? 'por peso' : 'por pieza'}${out ? ' · agotado' : ''}
+        ${hasRecipe ? `<span class="badge badge-recipe" title="Descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)">${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)</span>` : ''}
         ${cart.has(p.id) ? `<span class="badge badge-warn">${entryDisplay(cart.get(p.id))}${entryUnit(cart.get(p.id))} en carrito</span>` : ''}
       </div>`;
-    card.title = out ? `${p.name} (agotado)` : `${p.name} · stock: ${p.stock} ${p.unit}`;
+    card.title = hasRecipe
+      ? `${p.name} · descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s) de helado`
+      : (out ? `${p.name} (agotado)` : `${p.name} · stock: ${p.stock} ${p.unit}`);
     grid.appendChild(card);
   }
 }
@@ -173,7 +187,7 @@ async function addToCart(product, qty, displayUnit) {
   if (!product) return;
   const existing = cart.get(product.id);
   const newQty = Math.round(((existing ? existing.quantity : 0) + qty) * 1000) / 1000;
-  if (newQty > product.stock && product.unit !== 'kg') {
+  if (newQty > product.stock && product.unit !== 'kg' && !hasRecipe(product)) {
     setAlert(`Stock insuficiente de "${product.name}". Disponible: ${product.stock} ${product.unit}`);
     return;
   }
@@ -240,6 +254,8 @@ function updateQtyPreview() {
   $('qmQtyUnit').textContent = unitLabel;
   if (p.unit === 'kg' && valid && base > p.stock) {
     $('qmInfo').textContent = `⚠️ Estás superando el stock disponible (${p.stock} kg)`;
+  } else if (hasRecipe(p)) {
+    $('qmInfo').textContent = `Descuenta ${recipeTotalGrams(p)} g (${recipeBoteCount(p)} bote${recipeBoteCount(p) > 1 ? 's' : ''}) de helado por pieza`;
   } else {
     $('qmInfo').textContent = `Stock disponible: ${p.stock} ${p.unit === 'kg' ? 'kg' : p.unit}`;
   }
@@ -282,7 +298,9 @@ function openQtyModal(product) {
   $('qmTitle').textContent = product.name;
   $('qmName').textContent = product.name;
   const has100 = product.unit === 'kg' && product.price_per_100g != null && product.price_per_100g > 0;
-  $('qmMeta').textContent = `${product.barcode || 's/c'} · ${money(product.selling_price)} por kg · Stock: ${product.stock} kg`;
+  $('qmMeta').textContent = hasRecipe(product)
+    ? `${product.barcode || 's/c'} · ${money(product.selling_price)} por pieza · Receta: ${recipeTotalGrams(product)} g de ${recipeBoteCount(product)} bote(s)`
+    : `${product.barcode || 's/c'} · ${money(product.selling_price)} por kg · Stock: ${product.stock} kg`;
   $('qmUnitToggle').classList.toggle('hidden', product.unit !== 'kg');
   const btn100 = $('qmUnit100');
   if (btn100) {
@@ -379,8 +397,8 @@ async function charge() {
     cart.clear();
     renderCart();
     $('amountPaid').value = '';
-    setAlert(`Venta #${sale.id} registrada. Imprimiendo ticket…`, 'success');
-    printTicket(sale, { amountPaid: paid, change: lastPayment.change });
+    setAlert(`Venta #${sale.ticket_no || sale.id} registrada. Imprimiendo ticket…`, 'success');
+    await printTicket(sale, { amountPaid: paid, change: lastPayment.change });
     setTimeout(() => $('barcodeInput').focus(), 300);
   } catch (e) {
     setAlert(e.message);
@@ -419,7 +437,7 @@ $('productGrid').addEventListener('click', (e) => {
     const card = plus.closest('.prod-card');
     if (!card || card.disabled) return;
     const p = allProducts.find((x) => x.id === Number(card.dataset.id));
-    if (p && p.stock > 0) {
+    if (p && (p.stock > 0 || hasRecipe(p))) {
       if (p.unit === 'kg') addToCart(p, 0.1, '100g');
       else addToCart(p, 1);
     }
@@ -447,7 +465,7 @@ $('cartList').addEventListener('click', (e) => {
   } else {
     const inc = cartStep(entry);
     const nv = Math.round((entryDisplay(entry) + inc) * 1000) / 1000;
-    if (nv > entry.product.stock && entry.product.unit !== 'kg') {
+    if (nv > entry.product.stock && entry.product.unit !== 'kg' && !hasRecipe(entry.product)) {
       setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
       return;
     }
@@ -467,7 +485,7 @@ $('cartList').addEventListener('change', (e) => {
   const base = entry.product.unit === 'kg' && entry.displayUnit === 'gr' ? qty / 1000
     : entry.product.unit === 'kg' && entry.displayUnit === '100g' ? qty / 10
     : qty;
-  if (base > entry.product.stock && entry.product.unit !== 'kg') {
+  if (base > entry.product.stock && entry.product.unit !== 'kg' && !hasRecipe(entry.product)) {
     setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
     entry.quantity = entry.product.stock;
     renderCart();
@@ -566,5 +584,6 @@ $('amountPaid').addEventListener('keydown', (e) => {
 
 window.addEventListener('load', () => {
   loadCatalog();
+  initPrinterUI();
   $('barcodeInput').focus();
 });

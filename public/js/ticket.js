@@ -1,4 +1,4 @@
-const STORE_NAME = 'DULCERÍA "EL DULCE"';
+const STORE_NAME = 'DULCERÍA "VILLA ALEGRE"';
 const STORE_ADDRESS = 'Calle 5 de Mayo #12, Centro';
 const STORE_PHONE = 'Tel: 555-123-4567';
 
@@ -28,13 +28,11 @@ function renderTicket(sale, opts = {}) {
     const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
     const price = padZ(is100 ? it.sale_price : it.unit_price);
     const priceUnit = is100 ? '/100g' : (it.unit === 'kg' ? '/kg' : '');
-    const subtotal = padZ(it.subtotal);
     let n1 = `${qty}${unit}`;
     let n2 = nameShort;
-    let n3 = padZ(it.subtotal);
+    let n3 = `${price}${priceUnit}`;
     if (n1.length + 1 + n2.length > 26) n2 = n2.slice(0, 25 - n1.length);
     rows += `<tr><td>${n1}</td><td>${n2}</td><td class="right">${n3}</td></tr>`;
-    rows += `<tr><td></td><td colspan="2" style="font-size:10px;color:#000;">@ ${price}${priceUnit}</td></tr>`;
   }
 
   const methodLabel = payment === 'efectivo' ? 'EFECTIVO' : payment.toUpperCase();
@@ -44,33 +42,39 @@ function renderTicket(sale, opts = {}) {
 
   return `
   <div class="ticket" id="ticketPrint">
+    <div class="tc t-logo"><img src="/logo.svg" alt="Logo" class="t-logo-img"></div>
     <div class="tc t-name">${STORE_NAME}</div>
-    <div class="tc">${STORE_ADDRESS}</div>
-    <div class="tc">${STORE_PHONE}</div>
     <div class="t-sep"></div>
-    <div>TICKET: #${pad(sale.id, 6)}</div>
-    <div>FECHA: ${dateStr}</div>
-    <div>ARTICULOS: ${sale.items.length}</div>
+    <table class="t-meta">
+      <tr><td>TICKET</td><td class="right">#${pad(sale.ticket_no || sale.id, 6)}</td></tr>
+      <tr><td>FECHA</td><td class="right">${dateStr}</td></tr>
+      <tr><td>ARTICULOS</td><td class="right">${sale.items.length}</td></tr>
+    </table>
     <div class="t-sep"></div>
-    <table>
-      <tr><td><b>CANT</b></td><td><b>DESCRIPCION</b></td><td class="right"><b>IMPORTE</b></td></tr>
+    <table class="t-items">
+      <tr><td class="w-qty"><b>CANT</b></td><td><b>DESCRIPCION</b></td><td class="right w-cost"><b>COSTO</b></td></tr>
       ${rows}
     </table>
     <div class="t-sep"></div>
-    <table>
-      <tr><td>SUBTOTAL</td><td class="right">${padZ(sale.total_amount)}</td></tr>
-      <tr><td>TOTAL</td><td class="right">${padZ(sale.total_amount)}</td></tr>
+    <table class="t-totals">
+      <tr><td><b>TOTAL A PAGAR</b></td><td class="right"><b>${padZ(sale.total_amount)}</b></td></tr>
       ${paymentLine}
     </table>
     <div class="t-sep"></div>
     <div class="tc">* GRACIAS POR SU COMPRA *</div>
-    <div class="tc" style="font-size:10px;">Articulos vendidos no se cambian ni reembolsan</div>
-    <div class="tc" style="font-size:10px;">www.dulceriaeldulce.mx</div>
   </div>`;
 }
 
-/* Inyecta el ticket y dispara la impresión. */
-function printTicket(sale, opts) {
+/* Imprime el ticket: directo a la impresora configurada (ESC/POS por spooler) o con diálogo del navegador. */
+async function printTicket(sale, opts) {
+  if (typeof printer !== 'undefined' && printer.isRegistered()) {
+    try {
+      await printer.printSale(sale, opts);
+      return;
+    } catch (e) {
+      console.warn('[ticket] Impresión falló, usando diálogo del navegador.', e && e.message);
+    }
+  }
   let holder = document.getElementById('ticketHolder');
   if (!holder) {
     holder = document.createElement('div');

@@ -49,6 +49,27 @@ const api = {
   },
   reports: {
     today: () => api.get('/api/reports/today'),
+    range: (mode, opts = {}) => {
+      const qs = new URLSearchParams({ mode });
+      if (opts.year) qs.set('year', opts.year);
+      if (opts.month) qs.set('month', opts.month);
+      return api.get(`/api/reports/range?${qs}`);
+    },
+    product: (id, opts = {}) => {
+      const qs = new URLSearchParams();
+      if (opts.date) qs.set('date', opts.date);
+      if (opts.start_date) qs.set('start_date', opts.start_date);
+      if (opts.end_date) qs.set('end_date', opts.end_date);
+      return api.get(`/api/reports/product/${id}${qs.toString() ? `?${qs}` : ''}`);
+    },
+  },
+  stock: {
+    entry: (b) => api.post('/api/stock/entry', b),
+    movements: (params) => {
+      const qs = new URLSearchParams();
+      Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v != null) qs.set(k, v); });
+      return api.get(`/api/stock/movements?${qs}`);
+    },
   },
   cash: {
     status: () => api.get('/api/cash/status'),

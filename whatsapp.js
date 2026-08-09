@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs');
-const { Client, LocalAuth } = require('whatsapp-web.js');
 const QRCode = require('qrcode');
 const db = require('./db.js');
 
@@ -78,6 +77,7 @@ async function sendMessageTo(number, text) {
 
 async function init() {
   if (client) return;
+  const { Client, LocalAuth } = require('whatsapp-web.js');
   const puppeteerOpts = { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] };
   if (fs.existsSync(EDGE_PATH)) puppeteerOpts.executablePath = EDGE_PATH;
 
@@ -179,7 +179,7 @@ async function sendTestNow() {
   const s = getSettings();
   if (!s.number) throw new Error('Primero guarda un número de WhatsApp.');
   if (!state.connected) throw new Error('WhatsApp no está conectado (escanea el QR).');
-  const text = `✅ Prueba de alertas WhatsApp — POS Dulcería — ${new Date().toLocaleString('es-MX')}`;
+  const text = `✅ Prueba de alertas WhatsApp — Villa Alegre — ${new Date().toLocaleString('es-MX')}`;
   await sendMessageTo(s.number, text);
   return { message: text };
 }

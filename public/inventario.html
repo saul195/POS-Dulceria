@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POS Dulcería · Inventario</title>
+  <title>Villa Alegre · Inventario</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="cup">☕</span> POS Dulcería</div>
+    <div class="brand"><span class="cup">☕</span> Villa Alegre</div>
     <nav>
       <a href="index.html">Vender</a>
       <a href="inventario.html" class="active">Inventario</a>
@@ -24,6 +24,7 @@
         <input type="checkbox" id="lowStockOnly"> <b>Solo stock bajo</b>
       </label>
       <button class="btn" id="newBtn">+ Nuevo producto</button>
+      <button class="btn btn-success" id="entryBtn">⬆ Entrada de mercancía</button>
       <button class="btn btn-danger" id="deleteAllBtn">Eliminar todos</button>
       <button class="btn btn-success hidden" id="genAllBarcodesBtn">Regenerar códigos</button>
       <button class="btn btn-coffee hidden" id="exportBarcodesBtn">Exportar códigos de barras</button>
@@ -84,6 +85,30 @@
           <label>Categoría</label>
           <select id="fCategory"></select>
         </div>
+        <div class="form-field full recipe-wrap hidden">
+          <label class="checkbox-line">
+            <input type="checkbox" id="fIsBote"> <b>Es bote de helado</b>
+          </label>
+          <div class="hint">Un bote almacena el helado (stock en kg). Los helados con receta descuentan de un bote.</div>
+        </div>
+        <div class="form-field full recipe-helado-wrap hidden">
+          <label>Receta: bote de helado del que se descuenta</label>
+          <select id="fRecipeBote"></select>
+        </div>
+        <div class="form-field full recipe-helado-wrap hidden">
+          <label>Gramos de helado por pieza</label>
+          <input type="number" id="fRecipeGrams" step="1" min="0">
+          <div class="hint">Ej. 120 = cada pieza consume 120 g del bote. El stock del bote se descuenta en kg.</div>
+        </div>
+        <div class="form-field full recipe-helado-wrap hidden">
+          <label>Receta: 2º bote (solo combinados) <span class="muted">(opcional)</span></label>
+          <select id="fRecipeBote2"></select>
+        </div>
+        <div class="form-field full recipe-helado-wrap hidden">
+          <label>Gramos del 2º bote por pieza</label>
+          <input type="number" id="fRecipeGrams2" step="1" min="0">
+          <div class="hint">Ej. combinado = 60 g de vainilla + 60 g de chocolate. Si es vacío, solo se usa el 1er bote.</div>
+        </div>
         <div class="form-field full">
           <label>Precio de venta ($)</label>
           <input type="number" id="fPrice" step="0.01" min="0">
@@ -113,6 +138,37 @@
     </div>
   </div>
 
+  <div id="entryModal" class="modal-backdrop">
+    <div class="modal">
+      <h3>Entrada de mercancía</h3>
+      <p class="muted mb">Registra una entrada de stock (reabastecimiento). El inventario se actualiza y queda en el reporte de movimientos.</p>
+      <div class="form-field mb">
+        <label>Producto *</label>
+        <input type="text" id="entrySearch" placeholder="Busca por nombre o escanea el código de barras…" autocomplete="off">
+        <div class="suggest-list" id="entrySuggestions"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Stock actual</label>
+          <input type="number" id="entryCurrentStock" readonly>
+        </div>
+        <div class="form-field">
+          <label>Stock nuevo (cantidad que llega y se suma) *</label>
+          <input type="number" id="entryNewStock" step="0.01" min="0" placeholder="Ej. 10">
+        </div>
+      </div>
+      <div class="hint mb" id="entryCalc">Entran: —</div>
+      <div class="form-field mb">
+        <label>Motivo <span class="muted">(opcional)</span></label>
+        <input type="text" id="entryReason" placeholder="Ej. Compra al proveedor">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="entryCancel">Cancelar</button>
+        <button class="btn btn-success" id="entrySave">Registrar entrada</button>
+      </div>
+    </div>
+  </div>
+
   <div id="catsModal" class="modal-backdrop">
     <div class="modal">
       <h3>Gestionar categorías</h3>
@@ -135,7 +191,6 @@
   <script src="js/api.js"></script>
   <script src="js/ui.js"></script>
   <script src="vendor/JsBarcode.all.min.js"></script>
-  <script src="vendor/jspdf.umd.min.js"></script>
   <script src="js/inventario.js"></script>
 </body>
 </html>

@@ -118,10 +118,12 @@ app.get('/api/products/export', (req, res) => {
 });
 
 app.post('/api/products/import', (req, res) => {
-  const data = Array.isArray(req.body) ? req.body : req.body?.products;
-  if (!Array.isArray(data)) return res.status(400).json({ error: 'El cuerpo debe ser un array de productos' });
+  const body = req.body;
+  const rows = Array.isArray(body) ? body : body?.products;
+  if (!Array.isArray(rows)) return res.status(400).json({ error: 'El cuerpo debe ser un array de productos' });
 
   const getCat = db.prepare('SELECT id FROM categories WHERE name = ?');
+  const insCat = db.prepare('INSERT INTO categories (name, description) VALUES (?, ?)');
   const getProd = db.prepare('SELECT id FROM products WHERE barcode = ?');
   const insert = db.prepare(
     `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_per_100g, is_active)
@@ -132,14 +134,28 @@ app.post('/api/products/import', (req, res) => {
      WHERE id = ?`
   );
 
-  const imported = db.transaction((rows) => {
+  const imported = db.transaction((data) => {
+    const catIdMap = new Map();
+    for (const c of data.categories || []) {
+      if (!String(c.name || '').trim()) continue;
+      let cat = getCat.get(String(c.name).trim());
+      if (!cat) {
+        const info = insCat.run(String(c.name).trim(), String(c.description || '').trim());
+        cat = { id: info.lastInsertRowid };
+      }
+      if (c.id != null) catIdMap.set(Number(c.id), cat.id);
+    }
+
     let inserted = 0, updated = 0, skipped = 0;
-    for (const r of rows) {
+    for (const r of data.products || data) {
       const barcode = String(r.barcode ?? '').trim();
       if (!barcode || !String(r.name ?? '').trim()) { skipped++; continue; }
       let catId = null;
-      if (r.category_id != null) catId = Number(r.category_id) || null;
-      else if (r.category) { const c = getCat.get(String(r.category).trim()); catId = c ? c.id : null; }
+      if (r.category_id != null) {
+        const oldId = Number(r.category_id);
+        catId = catIdMap.has(oldId) ? catIdMap.get(oldId) : (oldId || null);
+      }
+      if (catId == null && r.category) { const c = getCat.get(String(r.category).trim()); catId = c ? c.id : null; }
       const existing = getProd.get(barcode);
       const params = [
         String(r.name).trim(),
@@ -153,8 +169,8 @@ app.post('/api/products/import', (req, res) => {
       if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), existing.id); updated++; }
       else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0)); inserted++; }
     }
-    return { inserted, updated, skipped };
-  })(data);
+    return { inserted, updated, skipped, categories: (data.categories || []).length };
+  })({ products: rows, categories: body?.categories || [] });
 
   res.status(201).json({ ok: true, message: `Importados: ${imported.inserted} nuevos, ${imported.updated} actualizados, ${imported.skipped} omitidos.`, ...imported });
 });

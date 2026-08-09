@@ -51,14 +51,13 @@ function receiptItemLines(it, qtyW, nameW, subW, gap) {
     : it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g`
     : fmtM(it.quantity);
   const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
-  const price = fmtM(is100 ? it.sale_price : it.unit_price);
-  const priceUnit = is100 ? '/100g' : (it.unit === 'kg' ? '/kg' : '');
+  const cost = fmtM(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
   let n1 = `${qty}${unit}`;
   let n2 = name;
   if (n2.length > nameW) n2 = n2.slice(0, nameW);
   if (n1.length > qtyW) n1 = n1.slice(0, qtyW);
   return [
-    padR(n1, qtyW) + ' '.repeat(gap) + padL(n2, nameW) + padR(price + priceUnit, subW),
+    padR(n1, qtyW) + ' '.repeat(gap) + padL(n2, nameW) + padR(cost, subW),
   ];
 }
 
@@ -88,8 +87,10 @@ function receiptLines(sale, opts = {}, cols) {
   L.push(sep);
   L.push({ text: padL('TOTAL A PAGAR', pairW) + padR(fmtM(sale.total_amount), subW), mode: 0x08 });
   if (sale.payment_method === 'efectivo') {
-    L.push({ text: padL('EFECTIVO', pairW) + padR(fmtM(Number(opts.amountPaid) || 0), subW) });
-    L.push({ text: padL('CAMBIO', pairW) + padR(fmtM(Number(opts.change) || 0), subW) });
+    const paid = sale.cash_received != null ? Number(sale.cash_received) : (Number(opts.amountPaid) || Number(sale.total_amount) || 0);
+    const change = sale.change != null ? Number(sale.change) : (Number(opts.change) || Math.max(0, paid - sale.total_amount));
+    L.push({ text: padL('EFECTIVO', pairW) + padR(fmtM(paid), subW) });
+    L.push({ text: padL('CAMBIO', pairW) + padR(fmtM(change), subW) });
   } else {
     L.push({ text: padL(String(sale.payment_method || 'PAGO').toUpperCase(), pairW) + padR(fmtM(sale.total_amount), subW) });
   }

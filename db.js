@@ -127,6 +127,14 @@ if (!saleCols.includes('ticket_no')) {
   db.exec('ALTER TABLE sales ADD COLUMN ticket_no INTEGER');
   console.log('[db] Columna ticket_no agregada a sales');
 }
+if (!saleCols.includes('cash_received')) {
+  db.exec('ALTER TABLE sales ADD COLUMN cash_received REAL');
+  console.log('[db] Columna cash_received agregada a sales');
+}
+if (!saleCols.includes('change')) {
+  db.exec('ALTER TABLE sales ADD COLUMN change REAL');
+  console.log('[db] Columna change agregada a sales');
+}
 db.exec(`
   UPDATE sales SET ticket_no = (
     SELECT COUNT(*) FROM sales s2

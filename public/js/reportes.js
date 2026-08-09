@@ -126,7 +126,10 @@ async function loadSales() {
           <td><span class="badge badge-ok">${s.payment_method}</span></td>
           <td class="num">${s.items_count}</td>
           <td class="num"><b>${moneyMX(s.total_amount)}</b></td>
-          <td class="num"><button class="btn btn-outline btn-sm view-btn" data-id="${s.id}">Ver ticket</button></td>
+          <td class="num">
+            <button class="btn btn-outline btn-sm view-btn" data-id="${s.id}">Ver ticket</button>
+            <button class="btn btn-outline btn-sm reprint-btn" data-id="${s.id}" title="Reimprimir el ticket en la impresora">Reimprimir</button>
+          </td>
         </tr>`).join('')
       : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px;">Sin ventas registradas hoy.</td></tr>`;
 
@@ -229,11 +232,17 @@ function renderCash(session) {
 /* ---------------- Detalle de ticket ---------------- */
 
 $('salesBody').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.view-btn');
-  if (!btn) return;
+  const viewBtn = e.target.closest('.view-btn');
+  const repBtn = e.target.closest('.reprint-btn');
+  if (!viewBtn && !repBtn) return;
   try {
-    const sale = await api.sales.get(btn.dataset.id);
-    previewTicket(sale);
+    const sale = await api.sales.get((viewBtn || repBtn).dataset.id);
+    if (repBtn) {
+      toast(`Reimprimiendo ticket #${sale.ticket_no || sale.id}…`, 'info');
+      await printTicket(sale);
+    } else {
+      previewTicket(sale);
+    }
   } catch (err) {
     toast(err.message, 'error');
   }
@@ -244,6 +253,7 @@ loadReports();
 loadSales();
 loadChart();
 setInterval(loadReports, 60000);
+if (typeof printer !== 'undefined' && printer.loadConfig) printer.loadConfig().catch(() => {});
 
 function initCardToggle(toggleId, bodyId, storageKey) {
   const toggle = $(toggleId);

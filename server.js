@@ -391,7 +391,7 @@ app.get('/api/reports/product/:id', (req, res) => {
 });
 
 app.post('/api/sales', (req, res) => {
-  const { items = [], payment_method = 'efectivo' } = req.body || {};
+  const { items = [], payment_method = 'efectivo', cash_received = 0, change = 0 } = req.body || {};
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'El carrito está vacío' });
   }
@@ -408,7 +408,7 @@ app.post('/api/sales', (req, res) => {
       const nextTicket = db.prepare(
         `SELECT COALESCE(MAX(ticket_no), 0) + 1 AS n FROM sales WHERE date(created_at) = date('now', 'localtime')`
       ).get().n;
-      const saleInfo = db.prepare('INSERT INTO sales (total_amount, payment_method, cash_session_id, ticket_no) VALUES (?, ?, ?, ?)');
+      const saleInfo = db.prepare('INSERT INTO sales (total_amount, payment_method, cash_session_id, ticket_no, cash_received, change) VALUES (?, ?, ?, ?, ?, ?)');
       const insItem = db.prepare(
         'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, product_name, sale_mode, sale_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       );
@@ -450,7 +450,8 @@ app.post('/api/sales', (req, res) => {
         const unitPrice = round2(Number(it.unit_price) || p.selling_price);
         const saleMode = it.sale_mode === '100g' ? '100g' : 'kg';
         const salePrice = saleMode === '100g' ? round2(Number(it.sale_price) || p.selling_price) : unitPrice;
-        const subtotal = round2(unitPrice * qty);
+        const linePrice = it.line_price != null && Number(it.line_price) > 0 ? round2(Number(it.line_price)) : null;
+        const subtotal = linePrice != null ? linePrice : round2(unitPrice * qty);
 
         if (ingredients.length > 0) {
           for (const ing of ingredients) {
@@ -467,7 +468,7 @@ app.post('/api/sales', (req, res) => {
         savedItems.push({ product_id: p.id, quantity: qty, unit_price: unitPrice, subtotal, product_name: p.name, unit: p.unit, barcode: p.barcode, sale_mode: saleMode, sale_price: salePrice });
       }
       total = round2(total);
-      const saleRes = saleInfo.run(total, payment_method, session ? session.id : null, nextTicket);
+      const saleRes = saleInfo.run(total, payment_method, session ? session.id : null, nextTicket, round2(Number(cash_received) || 0), round2(Number(change) || 0));
       const saleId = saleRes.lastInsertRowid;
       for (const it of savedItems) {
         insItem.run(saleId, it.product_id, it.quantity, it.unit_price, it.subtotal, it.product_name, it.sale_mode, it.sale_price);

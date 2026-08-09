@@ -488,7 +488,7 @@ td.num, th.num { text-align: right; }
 .prod-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(30,111,217,.15); transform: translateY(-1px); }
 .prod-card:active { transform: scale(.97); }
 .prod-card:disabled { opacity: .55; cursor: not-allowed; transform: none; }
-.prod-card .prod-name { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.25; padding-right: 24px; }
+.prod-card .prod-name { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.25; padding-right: 68px; }
 .prod-card .prod-price { font-size: 20px; font-weight: 800; color: var(--coffee-dark); }
 .prod-card .prod-meta { font-size: 11px; color: var(--text-muted); }
 .prod-card .prod-meta .badge { margin-left: 4px; }
@@ -512,6 +512,25 @@ td.num, th.num { text-align: right; }
   box-shadow: 0 2px 6px rgba(0,0,0,.18);
 }
 .card-plus:hover { background: var(--coffee); transform: scale(1.12); }
+
+.card-money {
+  position: absolute;
+  top: 8px;
+  right: 40px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
+.card-money:hover { background: var(--coffee); transform: scale(1.12); }
 
 .grid-empty { grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px 12px; }
 
@@ -570,6 +589,11 @@ td.num, th.num { text-align: right; }
 
 .quick-pay { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .quick-pay .btn { flex: 1 1 auto; min-width: 56px; padding: 8px 10px; font-size: 14px; }
+.quick-pay .btn.pressed { background: var(--success); color: #fff; transform: scale(.96); }
+
+.cm-round { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text); margin: 6px 0 4px; cursor: pointer; }
+.cm-round input { margin-top: 2px; }
+.badge-round { background: var(--coffee-light); color: var(--coffee-dark); border: 1px solid var(--coffee); }
 
 /* ---------- Selector de cantidad ---------- */
 .unit-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -846,6 +870,7 @@ html { -webkit-tap-highlight-color: transparent; }
   .cart-item .ci-qty .cart-qty { width: 54px; }
   .quick-pay .btn { min-width: 60px; padding: 10px 8px; }
   .card-plus { width: 30px; height: 30px; font-size: 20px; }
+  .card-money { width: 30px; height: 30px; font-size: 15px; right: 46px; }
   .toast { left: 12px; right: 12px; bottom: 12px; text-align: center; }
   .toolbar input[type="search"] { max-width: none; width: 100%; }
   .toolbar { gap: 8px; }

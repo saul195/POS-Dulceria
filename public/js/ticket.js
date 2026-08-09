@@ -12,8 +12,6 @@ function line(...parts) {
 
 /* Construye el HTML del ticket de 80mm (monospace, ~32 caracteres por línea). */
 function renderTicket(sale, opts = {}) {
-  const amountPaid = Number(opts.amountPaid || 0);
-  const change = Number(opts.change || 0);
   const payment = sale.payment_method;
 
   const d = new Date(String(sale.created_at).replace(' ', 'T'));
@@ -26,18 +24,19 @@ function renderTicket(sale, opts = {}) {
     const is100 = it.sale_mode === '100g' && it.sale_price != null;
     const qty = is100 ? `${Math.round(it.quantity * 10)}×100g` : (it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : padZ(it.quantity));
     const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
-    const price = padZ(is100 ? it.sale_price : it.unit_price);
-    const priceUnit = is100 ? '/100g' : (it.unit === 'kg' ? '/kg' : '');
+    const cost = padZ(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
     let n1 = `${qty}${unit}`;
     let n2 = nameShort;
-    let n3 = `${price}${priceUnit}`;
+    let n3 = cost;
     if (n1.length + 1 + n2.length > 26) n2 = n2.slice(0, 25 - n1.length);
     rows += `<tr><td>${n1}</td><td>${n2}</td><td class="right">${n3}</td></tr>`;
   }
 
   const methodLabel = payment === 'efectivo' ? 'EFECTIVO' : payment.toUpperCase();
+  const paid = sale.cash_received != null ? Number(sale.cash_received) : (Number(opts.amountPaid) || Number(sale.total_amount) || 0);
+  const change = sale.change != null ? Number(sale.change) : (Number(opts.change) || Math.max(0, paid - sale.total_amount));
   const paymentLine = payment === 'efectivo'
-    ? `<tr><td>${methodLabel}</td><td class="right">${padZ(amountPaid)}</td></tr><tr><td>CAMBIO</td><td class="right">${padZ(change)}</td></tr>`
+    ? `<tr><td>${methodLabel}</td><td class="right">${padZ(paid)}</td></tr><tr><td>CAMBIO</td><td class="right">${padZ(change)}</td></tr>`
     : `<tr><td>${methodLabel}</td><td class="right">${padZ(sale.total_amount)}</td></tr>`;
 
   return `

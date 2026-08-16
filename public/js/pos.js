@@ -492,14 +492,18 @@ async function charge() {
     cart.clear();
     renderCart();
     $('amountPaid').value = '';
-    setAlert(`Venta #${sale.ticket_no || sale.id} registrada. Imprimiendo ticket…`, 'success');
-    await printTicket(sale, { amountPaid: paid, change: lastPayment.change });
+    if ($('printTicket').checked) {
+      setAlert(`Venta #${sale.ticket_no || sale.id} registrada. Imprimiendo ticket…`, 'success');
+      await printTicket(sale, { amountPaid: paid, change: lastPayment.change });
+    } else {
+      setAlert(`Venta #${sale.ticket_no || sale.id} registrada. Ticket omitido.`, 'success');
+    }
     setTimeout(() => $('barcodeInput').focus(), 300);
   } catch (e) {
     setAlert(e.message);
   } finally {
     chargeBtn.disabled = false;
-    chargeBtn.textContent = 'Cobrar e imprimir (F9)';
+    chargeBtn.textContent = 'Cobrar (F9)';
   }
 }
 

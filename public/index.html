@@ -28,7 +28,7 @@
     <span><b>F1</b> Ayuda</span>
     <span><b>F2</b> Código / buscar</span>
     <span><b>F4</b> Efectivo recibido</span>
-    <span><b>F9</b> Cobrar e imprimir</span>
+    <span><b>F9</b> Cobrar</span>
     <span><b>Esc</b> Cerrar / cancelar venta</span>
   </div>
 
@@ -83,8 +83,14 @@
         <div class="change-box" id="changeBox">CAMBIO: $0.00</div>
 
         <div class="pay-row mt">
+          <label class="checkbox-line" for="printTicket">
+            <input type="checkbox" id="printTicket" checked>
+            Imprimir ticket
+          </label>
+        </div>
+        <div class="pay-row">
           <button class="btn btn-success btn-lg btn-block" id="chargeBtn">
-            Cobrar e imprimir (F9)
+            Cobrar (F9)
           </button>
         </div>
         <div class="pay-row">
@@ -105,7 +111,7 @@
         <tr><td><b>F2</b></td><td>Enfocar el campo de código de barras</td></tr>
         <tr><td><b>Enter</b></td><td>Agregar el producto escaneado/buscado</td></tr>
         <tr><td><b>F4</b></td><td>Ir al campo de efectivo recibido</td></tr>
-        <tr><td><b>F9</b></td><td>Cobrar e imprimir ticket</td></tr>
+        <tr><td><b>F9</b></td><td>Cobrar (imprime ticket si la casilla está marcada)</td></tr>
         <tr><td><b>Enter</b> (en efectivo)</td><td>Cobrar</td></tr>
         <tr><td><b>Esc</b></td><td>Cerrar ventana o cancelar venta</td></tr>
         <tr><td><b>+</b> en una tarjeta</td><td>Agregar 1 al instante (100 g si es por peso)</td></tr>

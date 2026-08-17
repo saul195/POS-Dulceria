@@ -117,6 +117,58 @@
             <div class="pagination" id="stockPagination"></div>
           </div>
         </div>
+
+        <div class="card mt" id="prodSalesCard">
+          <div class="card-head">
+            <h2 style="margin:0;">Ventas por producto</h2>
+            <label class="toggle-label" title="Mostrar u ocultar ventas por producto">
+              <input type="checkbox" id="prodSalesToggle" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Activa</span>
+            </label>
+          </div>
+          <div id="prodSalesContent">
+            <div class="ps-controls">
+              <div class="ps-search-wrap">
+                <input type="search" id="psSearch" placeholder="Buscar producto por nombre o código..." autocomplete="off">
+                <div class="ps-suggestions hidden" id="psSuggestions"></div>
+              </div>
+              <div class="ps-period">
+                <select id="psPeriod">
+                  <option value="day">Hoy</option>
+                  <option value="week">Esta semana</option>
+                  <option value="month" selected>Este mes</option>
+                  <option value="year">Este año</option>
+                  <option value="custom">Rango personalizado</option>
+                </select>
+                <div class="ps-dates hidden" id="psDates">
+                  <input type="date" id="psFrom">
+                  <span class="muted">a</span>
+                  <input type="date" id="psTo">
+                </div>
+                <button class="btn btn-sm btn-success" id="psGo">Buscar</button>
+              </div>
+            </div>
+            <div id="psResult" class="hidden">
+              <div class="ps-product-info" id="psProductInfo"></div>
+              <div class="ps-summary" id="psSummary"></div>
+              <div class="table-wrap mt">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th class="num">Unidades</th>
+                      <th class="num">Tickets</th>
+                      <th class="num">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="psBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="psEmpty" class="muted" style="text-align:center;padding:24px;">Selecciona un producto y un período para ver sus ventas.</div>
+          </div>
+        </div>
       </div>
 
       <aside class="report-side">

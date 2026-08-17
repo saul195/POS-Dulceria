@@ -62,6 +62,12 @@ const api = {
       if (opts.end_date) qs.set('end_date', opts.end_date);
       return api.get(`/api/reports/product/${id}${qs.toString() ? `?${qs}` : ''}`);
     },
+    productSales: (productId, opts = {}) => {
+      const qs = new URLSearchParams({ product_id: productId });
+      if (opts.start_date) qs.set('start_date', opts.start_date);
+      if (opts.end_date) qs.set('end_date', opts.end_date);
+      return api.get(`/api/reports/product-sales?${qs}`);
+    },
   },
   stock: {
     entry: (b) => api.post('/api/stock/entry', b),

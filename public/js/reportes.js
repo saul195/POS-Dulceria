@@ -276,6 +276,7 @@ function initCardToggle(toggleId, bodyId, storageKey) {
 initCardToggle('periodToggle', 'periodBody', 'pos_period_card');
 initCardToggle('salesToggle', 'salesContent', 'pos_sales_card');
 initCardToggle('cashToggle', 'cashContent', 'pos_cash_card');
+initCardToggle('prodSalesToggle', 'prodSalesContent', 'pos_prod_sales_card');
 
 document.querySelectorAll('.seg-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -295,6 +296,125 @@ if (chartGo) {
     loadChart();
   });
 }
+
+/* ---------------- Ventas por producto ---------------- */
+
+let psSelectedProduct = null;
+let psAllProducts = [];
+
+function psGetDates() {
+  const period = $('psPeriod').value;
+  const now = new Date();
+  let sd, ed;
+  if (period === 'day') {
+    sd = ed = today;
+  } else if (period === 'week') {
+    const day = now.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - diff);
+    sd = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+    ed = today;
+  } else if (period === 'month') {
+    sd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    ed = today;
+  } else if (period === 'year') {
+    sd = `${now.getFullYear()}-01-01`;
+    ed = today;
+  } else {
+    sd = $('psFrom').value || today;
+    ed = $('psTo').value || today;
+  }
+  return { start_date: sd, end_date: ed };
+}
+
+async function psSearchProducts(query) {
+  if (!query || query.length < 2) { psAllProducts = []; return; }
+  try {
+    const data = await api.products.list({ search: query, page: 1, pageSize: 20 });
+    psAllProducts = data.products || [];
+  } catch (e) { psAllProducts = []; }
+}
+
+function renderPsSuggestions() {
+  const box = $('psSuggestions');
+  if (!psAllProducts.length) { box.classList.add('hidden'); return; }
+  box.innerHTML = psAllProducts.map((p) =>
+    `<div class="ps-sug-item" data-id="${p.id}" data-name="${p.name}">${p.name} <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit}</span></div>`
+  ).join('');
+  box.classList.remove('hidden');
+}
+
+async function loadProductSales() {
+  if (!psSelectedProduct) return;
+  const dates = psGetDates();
+  try {
+    const r = await api.reports.productSales(psSelectedProduct.id, dates);
+    $('psResult').classList.remove('hidden');
+    $('psEmpty').classList.add('hidden');
+    const p = r.product;
+    $('psProductInfo').innerHTML = `
+      <b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit} · Stock actual: ${num(p.stock, 2)} ${p.unit}</span>`;
+    $('psSummary').innerHTML = `
+      <div class="ps-stat"><div class="label">Unidades vendidas</div><div class="value">${num(r.summary.qty, 2)} ${p.unit}</div></div>
+      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.revenue)}</div></div>
+      <div class="ps-stat"><div class="label">Transacciones</div><div class="value">${r.summary.tickets}</div></div>`;
+    const body = $('psBody');
+    if (r.days.length) {
+      body.innerHTML = r.days.map((d) => `
+        <tr>
+          <td>${d.day}</td>
+          <td class="num"><b>${num(d.qty, 2)}</b> ${p.unit}</td>
+          <td class="num">${d.tickets}</td>
+          <td class="num"><b>${moneyMX(d.total)}</b></td>
+        </tr>`).join('');
+    } else {
+      body.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px;">Sin ventas de este producto en el período seleccionado.</td></tr>`;
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+$('psSearch').addEventListener('input', async (e) => {
+  const q = e.target.value.trim();
+  psSelectedProduct = null;
+  $('psResult').classList.add('hidden');
+  $('psEmpty').classList.remove('hidden');
+  await psSearchProducts(q);
+  renderPsSuggestions();
+});
+
+$('psSuggestions').addEventListener('click', (e) => {
+  const item = e.target.closest('.ps-sug-item');
+  if (!item) return;
+  const id = Number(item.dataset.id);
+  const name = item.dataset.name;
+  psSelectedProduct = psAllProducts.find((p) => p.id === id) || { id, name };
+  $('psSearch').value = name;
+  $('psSuggestions').classList.add('hidden');
+  loadProductSales();
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.ps-search-wrap')) {
+    const box = $('psSuggestions');
+    if (box) box.classList.add('hidden');
+  }
+});
+
+$('psPeriod').addEventListener('change', () => {
+  const isCustom = $('psPeriod').value === 'custom';
+  $('psDates').classList.toggle('hidden', !isCustom);
+  if (psSelectedProduct) loadProductSales();
+});
+
+$('psGo').addEventListener('click', () => {
+  if (psSelectedProduct) loadProductSales();
+});
+
+if ($('psFrom')) $('psFrom').value = today;
+if ($('psTo')) $('psTo').value = today;
 
 /* ---------------- Entradas y Salidas de stock ---------------- */
 

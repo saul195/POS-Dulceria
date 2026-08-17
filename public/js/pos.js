@@ -93,19 +93,24 @@ function renderGrid() {
   for (const p of list) {
     const hasRecipe = p.recipe_bote_id && p.recipe_grams > 0 || p.recipe_bote_id2 && p.recipe_grams2 > 0;
     const out = !hasRecipe && p.stock <= 0;
-    const card = document.createElement('button');
+    const card = document.createElement('div');
     const isKg = p.unit === 'kg';
-    card.className = `prod-card${cart.has(p.id) ? ' in-cart' : ''}`;
-    card.disabled = out;
+    card.className = `prod-card${cart.has(p.id) ? ' in-cart' : ''}${out ? ' out-of-stock' : ''}`;
     card.dataset.id = p.id;
+    const lowStock = !out && !hasRecipe && p.stock > 0 && p.stock <= (p.min_stock || 10);
+    const stockDot = out ? 'dot-out' : lowStock ? 'dot-low' : 'dot-ok';
     card.innerHTML = `
-      ${!out && (!isKg || p.price_per_100g > 0) ? '<span class="card-plus" title="Agregar 1 al instante">+</span>' : ''}
-      ${!out ? '<span class="card-money" title="Cobrar una cantidad en pesos (ej. 10 pesos)">$</span>' : ''}
-      <div class="prod-name">${p.name}</div>
-      <div class="prod-price">${money(p.selling_price)}</div>
-      <div class="prod-meta">${isKg ? 'por peso' : 'por pieza'}${out ? ' · agotado' : ''}
-        ${hasRecipe ? `<span class="badge badge-recipe" title="Descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)">${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)</span>` : ''}
-        ${cart.has(p.id) ? `<span class="badge badge-warn">${entryDisplay(cart.get(p.id))}${entryUnit(cart.get(p.id))} en carrito</span>` : ''}
+      <div class="card-header">
+        <div class="prod-name">${p.name}</div>
+        ${cart.has(p.id) ? `<span class="cart-count">${entryDisplay(cart.get(p.id))}${entryUnit(cart.get(p.id))}</span>` : ''}
+      </div>
+      <div class="prod-price">${money(p.selling_price)}<span class="prod-unit">${isKg ? '/kg' : '/pza'}</span></div>
+      <div class="prod-meta">
+        <span class="stock-indicator ${stockDot}" title="${out ? 'Agotado' : `Stock: ${p.stock} ${p.unit}`}"></span>
+        ${hasRecipe ? `<span class="badge badge-recipe" title="Descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)">${recipeTotalGrams(p)}g de ${recipeBoteCount(p)} bote(s)</span>` : ''}
+      </div>
+      <div class="card-actions">
+        ${!out && (!isKg || p.price_per_100g > 0) ? `<button class="act-btn act-plus" data-action="plus" title="Agregar al carrito">+</button>` : ''}
       </div>`;
     card.title = hasRecipe
       ? `${p.name} · descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s) de helado`
@@ -126,26 +131,50 @@ function renderCart() {
   for (const { product, quantity, displayUnit, unitPrice, fixedPrice } of cart.values()) {
     const entry = { product, quantity, displayUnit, unitPrice, fixedPrice };
     const subtotal = entrySubtotal(entry);
-    const d = entryDisplay(entry);
-    const u = entryUnit(entry);
+    const isKg = product.unit === 'kg' && displayUnit === 'gr';
     const item = document.createElement('div');
-    item.className = 'cart-item';
-    const step = cartStep(entry);
-    item.innerHTML = `
-      <div class="ci-info">
-        <div class="ci-name">${product.name}</div>
-        <div class="ci-meta">${product.barcode} · ${money(product.selling_price)}/${product.unit}
-        ${fixedPrice != null ? '<span class="badge badge-round" title="Precio redondeado, gramaje sin cambios">redondeado</span>' : ''}</div>
-      </div>
-      <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar del carrito">✕</button>
-      <div class="ci-qty">
-        <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
-        <input type="number" class="cart-qty" value="${d}" min="0.001" step="${step}"
-               data-id="${product.id}" title="Modificar cantidad">
-        <span class="ci-unit">${u}</span>
-        <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
-      </div>
-      <div class="ci-sub">${money(subtotal)}</div>`;
+    item.className = `cart-item${isKg ? ' kg-item' : ''}`;
+    if (isKg) {
+      const grams = Math.round(quantity * 1000);
+      const pesos = Math.round((quantity * product.selling_price) * 100) / 100;
+      item.innerHTML = `
+        <div class="ci-top">
+          <div class="ci-name">${product.name}</div>
+          <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar">✕</button>
+        </div>
+        <div class="ci-meta">${money(product.selling_price)}/kg · Stock: ${product.stock} kg</div>
+        <div class="ci-controls">
+          <div class="ci-row">
+            <span class="ci-prefix">$</span>
+            <input type="number" class="ci-pesos" data-id="${product.id}" value="${pesos}" min="0" step="1" inputmode="decimal">
+            <span class="ci-arrow">→</span>
+            <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
+            <input type="number" class="cart-qty" value="${grams}" min="0" step="10" data-id="${product.id}" title="Gramos">
+            <span class="ci-unit">g</span>
+            <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
+          </div>
+        </div>
+        <div class="ci-sub">${money(subtotal)}</div>`;
+    } else {
+      const d = entryDisplay(entry);
+      const u = entryUnit(entry);
+      const step = cartStep(entry);
+      item.innerHTML = `
+        <div class="ci-top">
+          <div class="ci-name">${product.name}</div>
+          <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar">✕</button>
+        </div>
+        <div class="ci-meta">${product.barcode} · ${money(product.selling_price)}/${product.unit}</div>
+        <div class="ci-controls">
+          <div class="ci-row">
+            <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
+            <input type="number" class="cart-qty" value="${d}" min="0.001" step="${step}" data-id="${product.id}" title="Cantidad">
+            <span class="ci-unit">${u}</span>
+            <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
+          </div>
+        </div>
+        <div class="ci-sub">${money(subtotal)}</div>`;
+    }
     list.appendChild(item);
   }
   renderGrid();
@@ -160,7 +189,8 @@ function cartTotal() {
 }
 
 function entrySubtotal(entry) {
-  return entry.fixedPrice != null ? entry.fixedPrice : entry.unitPrice * entry.quantity;
+  const raw = entry.fixedPrice != null ? entry.fixedPrice : entry.unitPrice * entry.quantity;
+  return Math.round(raw);
 }
 
 function updateChange() {
@@ -209,145 +239,33 @@ async function addToCart(product, qty, displayUnit, fixedPrice) {
   setAlert(`${product.name} agregado al carrito.`, 'info');
 }
 
-/* ---------------- Selector de cantidad (modal) ---------------- */
-
-let qtyState = { product: null, unit: 'kg' };
-
 function entryDisplay(entry) {
   const { product, quantity, displayUnit } = entry;
   if (product.unit === 'kg' && displayUnit === 'gr') return Math.round(quantity * 1000);
-  if (product.unit === 'kg' && displayUnit === '100g') return Math.round(quantity * 10);
   return Math.round(quantity * 1000) / 1000;
 }
 
 function entryUnit(entry) {
   const { product, displayUnit } = entry;
   if (product.unit === 'kg' && displayUnit === 'gr') return 'g';
-  if (product.unit === 'kg' && displayUnit === '100g') return '×100g';
   return product.unit;
 }
 
 function entryPrice(entry) {
-  const { product, displayUnit } = entry;
-  if (product.unit === 'kg' && displayUnit === '100g') return product.price_per_100g * 10;
+  const { product } = entry;
   return product.selling_price;
 }
 
 function setEntryQty(entry, displayValue) {
   const { product, displayUnit } = entry;
   if (product.unit === 'kg' && displayUnit === 'gr') entry.quantity = displayValue / 1000;
-  else if (product.unit === 'kg' && displayUnit === '100g') entry.quantity = displayValue / 10;
   else entry.quantity = displayValue;
 }
 
 function cartStep(entry) {
   if (entry.product.unit !== 'kg') return 1;
-  if (entry.displayUnit === '100g') return 1;
   if (entry.displayUnit === 'gr') return 10;
   return 0.01;
-}
-
-const toBaseQty = (unit) => unit === 'gr' ? 1 / 1000 : unit === '100g' ? 1 / 10 : 1;
-const fromBaseQty = (unit) => unit === 'gr' ? 1000 : unit === '100g' ? 10 : 1;
-
-function qtyBaseValue() {
-  const q = parseFloat($('qmQty').value);
-  return q * toBaseQty(qtyState.unit);
-}
-
-function updateQtyPreview() {
-  const p = qtyState.product;
-  if (!p) return;
-  const q = parseFloat($('qmQty').value);
-  const base = q * toBaseQty(qtyState.unit);
-  const valid = q > 0;
-  const unitLabel = qtyState.unit === '100g' ? '×100g' : (qtyState.unit === 'gr' ? 'g' : 'kg');
-  $('qmOk').disabled = !valid;
-  $('qmQtyUnit').textContent = unitLabel;
-  if (p.unit === 'kg' && valid && base > p.stock) {
-    $('qmInfo').textContent = `⚠️ Estás superando el stock disponible (${p.stock} kg)`;
-  } else if (hasRecipe(p)) {
-    $('qmInfo').textContent = `Descuenta ${recipeTotalGrams(p)} g (${recipeBoteCount(p)} bote${recipeBoteCount(p) > 1 ? 's' : ''}) de helado por pieza`;
-  } else {
-    $('qmInfo').textContent = `Stock disponible: ${p.stock} ${p.unit === 'kg' ? 'kg' : p.unit}`;
-  }
-}
-
-function setQtyModalUnit(unit) {
-  const p = qtyState.product;
-  if (!p) return;
-  if (unit === '100g') {
-    $('qmQty').value = 1;
-    $('qmQty').step = '1';
-    $('qmQty').min = '1';
-    qtyState.unit = '100g';
-    $('qmUnitToggle').querySelectorAll('.unit-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.unit === unit);
-    });
-    $('qmQtyLabel').textContent = 'Paquetes de 100 g';
-    confirmQtyModal();
-    return;
-  }
-  const prev = qtyState.unit;
-  qtyState.unit = unit;
-  $('qmUnitToggle').querySelectorAll('.unit-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.unit === unit);
-  });
-  let val = parseFloat($('qmQty').value) || 0;
-  val = Math.round(val * toBaseQty(prev) * fromBaseQty(unit) * 1000) / 1000;
-  if (!val) val = unit === 'kg' ? 1 : (unit === 'gr' ? 100 : 1);
-  $('qmQty').value = val;
-  $('qmQty').step = unit === 'kg' ? '0.01' : '1';
-  $('qmQty').min = unit === 'kg' ? '0' : '1';
-  $('qmQtyLabel').textContent = unit === 'kg' ? 'Cantidad en kilogramos' : unit === 'gr' ? 'Cantidad en gramos' : 'Paquetes de 100 g';
-  updateQtyPreview();
-}
-
-function openQtyModal(product) {
-  if (!product) return;
-  qtyState.product = product;
-  qtyState.unit = 'kg';
-  $('qmTitle').textContent = product.name;
-  $('qmName').textContent = product.name;
-  const has100 = product.unit === 'kg' && product.price_per_100g != null && product.price_per_100g > 0;
-  $('qmMeta').textContent = hasRecipe(product)
-    ? `${product.barcode || 's/c'} · ${money(product.selling_price)} por pieza · Receta: ${recipeTotalGrams(product)} g de ${recipeBoteCount(product)} bote(s)`
-    : `${product.barcode || 's/c'} · ${money(product.selling_price)} por kg · Stock: ${product.stock} kg`;
-  $('qmUnitToggle').classList.toggle('hidden', product.unit !== 'kg');
-  const btn100 = $('qmUnit100');
-  if (btn100) {
-    btn100.classList.toggle('hidden', !has100);
-    btn100.textContent = `Por 100 g · ${money(product.price_per_100g || 0)}`;
-  }
-  if (product.unit === 'kg') {
-    setQtyModalUnit('gr');
-  } else {
-    qtyState.unit = product.unit;
-    $('qmQty').value = 1;
-    $('qmQty').step = '1';
-    $('qmQty').min = '1';
-    $('qmQtyLabel').textContent = 'Cantidad';
-    $('qmQtyUnit').textContent = product.unit;
-    updateQtyPreview();
-  }
-  $('qtyModal').classList.add('show');
-  setTimeout(() => { $('qmQty').focus(); $('qmQty').select(); }, 60);
-}
-
-function closeQtyModal() {
-  $('qtyModal').classList.remove('show');
-  qtyState.product = null;
-}
-
-function confirmQtyModal() {
-  const p = qtyState.product;
-  if (!p) return;
-  const base = qtyBaseValue();
-  if (!(base > 0)) return;
-  const displayUnit = p.unit === 'kg' ? qtyState.unit : undefined;
-  addToCart(p, base, displayUnit);
-  closeQtyModal();
-  setTimeout(() => $('barcodeInput').focus(), 50);
 }
 
 async function addByInput(value) {
@@ -355,8 +273,14 @@ async function addByInput(value) {
   if (!value) return;
   const q = value.toLowerCase();
   const byCode = allProducts.find((p) => p.barcode && p.barcode.trim().toLowerCase() === q);
-  if (byCode) return openQtyModal(byCode);
-
+  if (byCode) {
+    if (byCode.stock > 0 || hasRecipe(byCode)) {
+      if (byCode.unit === 'kg') addToCart(byCode, 0.1, 'gr');
+      else addToCart(byCode, 1);
+    }
+    $('barcodeInput').value = '';
+    return;
+  }
   const exact = allProducts.filter((p) => p.name.toLowerCase() === q);
   let target = exact.length === 1 ? exact[0] : null;
   if (!target) {
@@ -377,84 +301,11 @@ async function addByInput(value) {
     $('barcodeInput').focus();
     return;
   }
-  openQtyModal(target);
+  if (target.stock > 0 || hasRecipe(target)) {
+    if (target.unit === 'kg') addToCart(target, 0.1, 'gr');
+    else addToCart(target, 1);
+  }
   $('barcodeInput').value = '';
-}
-
-/* ---------------- Cobro en pesos (modal) ---------------- */
-
-let moneyState = { product: null };
-
-function moneyQtyFor(product, amount) {
-  if (product.unit === 'kg') {
-    return { quantity: amount / (product.selling_price || 1), displayUnit: 'gr' };
-  }
-  return { quantity: Math.max(1, Math.round(amount / (product.selling_price || 1))), displayUnit: undefined };
-}
-
-function updateMoneyPreview() {
-  const p = moneyState.product;
-  if (!p) return;
-  const amt = parseFloat($('cmAmount').value);
-  const valid = amt > 0;
-  $('cmOk').disabled = !valid;
-  const rounded = $('cmRound').checked;
-  const roundLabel = $('cmRoundLabel');
-  if (!valid) { $('cmInfo').textContent = 'Escribe una cantidad mayor a 0.'; roundLabel.textContent = 'Redondear el precio al monto solicitado (sin cambiar el gramaje)'; return; }
-  if (p.unit === 'kg') {
-    const grams = Math.round((amt / (p.selling_price || 1)) * 1000);
-    const exact = money((grams / 1000) * p.selling_price);
-    if (rounded) {
-      $('cmInfo').textContent = `${grams} g → se cobrará ${money(amt)} exacto (gramaje sin cambios)`;
-      roundLabel.textContent = `Redondear a ${money(amt)} (en vez de ${exact})`;
-    } else {
-      $('cmInfo').textContent = `${money(p.selling_price)}/kg → ${grams} g ≈ ${exact}`;
-      roundLabel.textContent = `Redondear a ${money(amt)} (en vez de ${exact})`;
-    }
-  } else {
-    const pieces = Math.max(1, Math.round(amt / (p.selling_price || 1)));
-    const exact = money(pieces * p.selling_price);
-    if (rounded) {
-      $('cmInfo').textContent = `${pieces} pza(s) → se cobrará ${money(amt)} exacto`;
-      roundLabel.textContent = `Redondear a ${money(amt)} (en vez de ${exact})`;
-    } else {
-      $('cmInfo').textContent = `${money(p.selling_price)}/pieza → ${pieces} pza(s) ≈ ${exact}`;
-      roundLabel.textContent = `Redondear a ${money(amt)} (en vez de ${exact})`;
-    }
-  }
-}
-
-function openMoneyModal(product) {
-  if (!product) return;
-  moneyState.product = product;
-  $('cmTitle').textContent = 'Cobrar en pesos';
-  $('cmName').textContent = product.name;
-  $('cmMeta').textContent = product.unit === 'kg'
-    ? `${product.barcode || 's/c'} · ${money(product.selling_price)} por kg`
-    : `${product.barcode || 's/c'} · ${money(product.selling_price)} por pieza`;
-  $('cmAmount').value = '10';
-  $('cmRound').checked = false;
-  $('cmOk').disabled = false;
-  updateMoneyPreview();
-  $('moneyModal').classList.add('show');
-  setTimeout(() => { $('cmAmount').focus(); $('cmAmount').select(); }, 60);
-}
-
-function closeMoneyModal() {
-  $('moneyModal').classList.remove('show');
-  moneyState.product = null;
-}
-
-function confirmMoneyModal() {
-  const p = moneyState.product;
-  if (!p) return;
-  const amt = parseFloat($('cmAmount').value);
-  if (!(amt > 0)) return;
-  const { quantity, displayUnit } = moneyQtyFor(p, amt);
-  const fixedPrice = $('cmRound').checked ? Math.round(amt * 100) / 100 : undefined;
-  addToCart(p, quantity, displayUnit, fixedPrice);
-  closeMoneyModal();
-  setTimeout(() => $('barcodeInput').focus(), 50);
 }
 
 /* ---------------- Cobro ---------------- */
@@ -477,8 +328,8 @@ async function charge() {
       quantity,
       unit_price: unitPrice,
       line_price: fixedPrice != null ? Math.round(fixedPrice * 100) / 100 : undefined,
-      sale_mode: product.unit === 'kg' && displayUnit === '100g' ? '100g' : 'kg',
-      sale_price: product.unit === 'kg' && displayUnit === '100g' ? product.price_per_100g : unitPrice,
+      sale_mode: 'kg',
+      sale_price: unitPrice,
     }));
     const change = payment === 'efectivo' ? Math.round((paid - total) * 100) / 100 : 0;
     const sale = await api.sales.create({
@@ -531,29 +382,27 @@ $('barcodeInput').addEventListener('input', () => {
 });
 
 $('productGrid').addEventListener('click', (e) => {
-  const money = e.target.closest('.card-money');
-  if (money) {
-    const card = money.closest('.prod-card');
-    if (!card || card.disabled) return;
+  const actBtn = e.target.closest('.act-btn');
+  if (actBtn) {
+    e.stopPropagation();
+    const card = actBtn.closest('.prod-card');
+    if (!card || card.classList.contains('out-of-stock')) return;
     const p = allProducts.find((x) => x.id === Number(card.dataset.id));
-    if (p) openMoneyModal(p);
-    return;
-  }
-  const plus = e.target.closest('.card-plus');
-  if (plus) {
-    const card = plus.closest('.prod-card');
-    if (!card || card.disabled) return;
-    const p = allProducts.find((x) => x.id === Number(card.dataset.id));
-    if (p && (p.stock > 0 || hasRecipe(p))) {
-      if (p.unit === 'kg') addToCart(p, 0.1, '100g');
+    if (!p) return;
+    if (p.stock > 0 || hasRecipe(p)) {
+      if (p.unit === 'kg') addToCart(p, 0.1, 'gr');
       else addToCart(p, 1);
     }
     return;
   }
   const card = e.target.closest('.prod-card');
-  if (!card || card.disabled) return;
+  if (!card || card.classList.contains('out-of-stock')) return;
   const p = allProducts.find((x) => x.id === Number(card.dataset.id));
-  if (p) openQtyModal(p);
+  if (!p) return;
+  if (p.stock > 0 || hasRecipe(p)) {
+    if (p.unit === 'kg') addToCart(p, 0.1, 'gr');
+    else addToCart(p, 1);
+  }
 });
 
 $('cartList').addEventListener('click', (e) => {
@@ -591,7 +440,6 @@ $('cartList').addEventListener('change', (e) => {
   const qty = parseFloat(input.value);
   if (!(qty > 0)) { cart.delete(id); renderCart(); return; }
   const base = entry.product.unit === 'kg' && entry.displayUnit === 'gr' ? qty / 1000
-    : entry.product.unit === 'kg' && entry.displayUnit === '100g' ? qty / 10
     : qty;
   if (base > entry.product.stock && entry.product.unit !== 'kg' && !hasRecipe(entry.product)) {
     setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
@@ -602,6 +450,26 @@ $('cartList').addEventListener('change', (e) => {
   entry.quantity = Math.round(base * 1000) / 1000;
   entry.fixedPrice = undefined;
   renderCart();
+});
+
+$('cartList').addEventListener('input', (e) => {
+  const pesosInput = e.target.closest('.ci-pesos');
+  if (!pesosInput) return;
+  const id = Number(pesosInput.dataset.id);
+  const entry = cart.get(id);
+  if (!entry || entry.product.unit !== 'kg') return;
+  const amt = parseFloat(pesosInput.value) || 0;
+  if (amt <= 0) return;
+  const newQty = amt / (entry.product.selling_price || 1);
+  entry.quantity = Math.round(newQty * 1000) / 1000;
+  entry.fixedPrice = undefined;
+  const gramsEl = pesosInput.closest('.ci-controls').querySelector('.cart-qty');
+  if (gramsEl) gramsEl.value = Math.round(entry.quantity * 1000);
+  const subEl = pesosInput.closest('.cart-item').querySelector('.ci-sub');
+  if (subEl) subEl.textContent = money(entrySubtotal(entry));
+  const totalEl = $('totalLabel');
+  if (totalEl) totalEl.textContent = money(cartTotal());
+  updateChange();
 });
 
 $('amountPaid').addEventListener('input', updateChange);
@@ -634,39 +502,6 @@ document.querySelectorAll('.quick-btn').forEach((btn) => {
 $('chargeBtn').addEventListener('click', charge);
 $('cancelBtn').addEventListener('click', cancelSale);
 
-/* Selector de cantidad (modal) */
-$('qmOk').addEventListener('click', confirmQtyModal);
-$('qmCancel').addEventListener('click', closeQtyModal);
-$('qmQty').addEventListener('input', updateQtyPreview);
-$('qmQty').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); confirmQtyModal(); }
-});
-
-/* Cobro en pesos (modal) */
-$('cmOk').addEventListener('click', confirmMoneyModal);
-$('cmCancel').addEventListener('click', closeMoneyModal);
-$('cmAmount').addEventListener('input', updateMoneyPreview);
-$('cmRound').addEventListener('change', updateMoneyPreview);
-$('cmAmount').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); confirmMoneyModal(); }
-});
-$('qmMinus').addEventListener('click', () => {
-  const step = qtyState.unit === 'gr' ? 10 : qtyState.unit === '100g' ? 1 : 0.01;
-  const cur = parseFloat($('qmQty').value) || 0;
-  $('qmQty').value = Math.max(0, Math.round((cur - step) * 1000) / 1000);
-  updateQtyPreview();
-});
-$('qmPlus').addEventListener('click', () => {
-  const step = qtyState.unit === 'gr' ? 10 : qtyState.unit === '100g' ? 1 : 0.01;
-  const cur = parseFloat($('qmQty').value) || 0;
-  $('qmQty').value = Math.round((cur + step) * 1000) / 1000;
-  updateQtyPreview();
-});
-$('qmUnitToggle').addEventListener('click', (e) => {
-  const b = e.target.closest('.unit-btn');
-  if (b) setQtyModalUnit(b.dataset.unit);
-});
-
 $('previewBtn').addEventListener('click', () => {
   if (!lastSale) { setAlert('Aún no hay un ticket para previsualizar.', 'info'); return; }
   previewTicket(lastSale, lastPayment);
@@ -693,10 +528,6 @@ document.addEventListener('keydown', (e) => {
     charge();
   }
   if (e.key === 'Escape') {
-    const qtyOpen = $('qtyModal').classList.contains('show');
-    if (qtyOpen) { closeQtyModal(); return; }
-    const moneyOpen = $('moneyModal').classList.contains('show');
-    if (moneyOpen) { closeMoneyModal(); return; }
     const helpOpen = $('helpModal').classList.contains('show');
     if (helpOpen) { $('helpModal').classList.remove('show'); return; }
     const modal = document.querySelector('.modal-backdrop.show');

@@ -36,6 +36,10 @@ const todayStart = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 00:00:00`;
 };
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 /* ============================ CATEGORÍAS ============================ */
 
@@ -355,6 +359,33 @@ app.get('/api/stock/movements', (req, res) => {
      FROM stock_movements m JOIN products p ON p.id = m.product_id ${whereSql}`
   ).get(...params);
   res.json({ movements: rows, total, page: pageNum, pageSize: size, summary });
+});
+
+app.get('/api/reports/product-sales', (req, res) => {
+  const { product_id, start_date, end_date } = req.query;
+  if (!product_id) return res.status(400).json({ error: 'product_id es requerido' });
+  const pid = Number(product_id);
+  const p = db.prepare('SELECT * FROM products WHERE id = ?').get(pid);
+  if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
+  const sd = start_date ? String(start_date).slice(0, 10) : todayStr();
+  const ed = end_date ? String(end_date).slice(0, 10) : todayStr();
+  const rows = db.prepare(
+    `SELECT date(s.created_at) AS day, SUM(si.quantity) AS qty, SUM(si.subtotal) AS total, COUNT(DISTINCT s.id) AS tickets
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id
+     WHERE si.product_id = ? AND date(s.created_at) BETWEEN ? AND ?
+     GROUP BY date(s.created_at) ORDER BY day`
+  ).all(pid, sd, ed);
+  const summary = db.prepare(
+    `SELECT COALESCE(SUM(si.quantity), 0) AS total_qty, COALESCE(SUM(si.subtotal), 0) AS total_revenue, COUNT(DISTINCT s.id) AS total_tickets
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id
+     WHERE si.product_id = ? AND date(s.created_at) BETWEEN ? AND ?`
+  ).get(pid, sd, ed);
+  res.json({
+    product: { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, selling_price: p.selling_price, stock: p.stock },
+    start_date: sd, end_date: ed,
+    days: rows,
+    summary: { qty: round2(summary.total_qty), revenue: round2(summary.total_revenue), tickets: summary.total_tickets },
+  });
 });
 
 app.get('/api/reports/product/:id', (req, res) => {

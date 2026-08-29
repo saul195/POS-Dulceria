@@ -63,7 +63,9 @@ const api = {
       return api.get(`/api/reports/product/${id}${qs.toString() ? `?${qs}` : ''}`);
     },
     productSales: (productId, opts = {}) => {
-      const qs = new URLSearchParams({ product_id: productId });
+      const qs = new URLSearchParams();
+      if (productId) qs.set('product_id', productId);
+      if (opts.all) qs.set('all', '1');
       if (opts.start_date) qs.set('start_date', opts.start_date);
       if (opts.end_date) qs.set('end_date', opts.end_date);
       return api.get(`/api/reports/product-sales?${qs}`);
@@ -98,6 +100,7 @@ const money = (n) => {
 };
 const moneyMX = (n) => `${money(n)} MXN`;
 const num = (n, d = 2) => Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
+const stockNum = (n, unit) => unit === 'kg' ? num(n, 3) : num(n, 2);
 
 function toast(message, type = 'success') {
   let el = document.getElementById('toast');

@@ -31,6 +31,7 @@ app.get('/logo.svg', (req, res) => {
 });
 
 const round2 = (n) => Math.round(n * 100) / 100;
+const round3 = (n) => Math.round(n * 1000) / 1000;
 
 const todayStart = () => {
   const d = new Date();
@@ -165,8 +166,8 @@ app.post('/api/products/import', (req, res) => {
         String(r.name).trim(),
         catId,
         round2(Number(r.selling_price) || 0),
-        round2(Number(r.stock) || 0),
-        round2(Number(r.min_stock) || 0),
+        round3(Number(r.stock) || 0),
+        round3(Number(r.min_stock) || 0),
         String(r.unit || 'pza'),
         r.price_per_100g != null && r.price_per_100g !== '' ? round2(Number(r.price_per_100g)) : null,
       ];
@@ -211,8 +212,8 @@ app.post('/api/products', (req, res) => {
       String(b.name).trim(),
       b.category_id ? Number(b.category_id) : null,
       round2(Number(b.selling_price) || 0),
-      round2(Number(b.stock) || 0),
-      round2(Number(b.min_stock) || 0),
+      round3(Number(b.stock) || 0),
+      round3(Number(b.min_stock) || 0),
       String(b.unit || 'pza'),
       b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
       b.is_active === undefined ? 1 : (b.is_active ? 1 : 0),
@@ -242,8 +243,8 @@ app.put('/api/products/:id', (req, res) => {
       String(b.name ?? p.name).trim(),
       b.category_id != null ? Number(b.category_id) : p.category_id,
       round2(Number(b.selling_price ?? p.selling_price)),
-      round2(Number(b.stock ?? p.stock)),
-      round2(Number(b.min_stock ?? p.min_stock)),
+      round3(Number(b.stock ?? p.stock)),
+      round3(Number(b.min_stock ?? p.min_stock)),
       String(b.unit ?? p.unit),
       b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
       b.is_active === undefined ? p.is_active : (b.is_active ? 1 : 0),
@@ -309,13 +310,13 @@ app.get('/api/sales/:id', (req, res) => {
 
 app.post('/api/stock/entry', (req, res) => {
   const { product_id, quantity, reason = '' } = req.body || {};
-  const qty = round2(Number(quantity));
+  const qty = round3(Number(quantity));
   if (!Number(product_id)) return res.status(400).json({ error: 'Falta el producto' });
   if (!(qty > 0)) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
   const p = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(product_id));
   if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
   const addStock = db.transaction(() => {
-    db.prepare('UPDATE products SET stock = round(stock + ?, 2) WHERE id = ?').run(qty, p.id);
+    db.prepare('UPDATE products SET stock = round(stock + ?, 3) WHERE id = ?').run(qty, p.id);
     const info = db.prepare('INSERT INTO stock_movements (product_id, type, quantity, reason) VALUES (?, ?, ?, ?)')
       .run(p.id, 'entrada', qty, String(reason || 'Entrada de mercancía'));
     return info.lastInsertRowid;
@@ -362,29 +363,34 @@ app.get('/api/stock/movements', (req, res) => {
 });
 
 app.get('/api/reports/product-sales', (req, res) => {
-  const { product_id, start_date, end_date } = req.query;
-  if (!product_id) return res.status(400).json({ error: 'product_id es requerido' });
-  const pid = Number(product_id);
-  const p = db.prepare('SELECT * FROM products WHERE id = ?').get(pid);
-  if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
-  const sd = start_date ? String(start_date).slice(0, 10) : todayStr();
-  const ed = end_date ? String(end_date).slice(0, 10) : todayStr();
+  const { product_id, start_date, end_date, all } = req.query;
+  const pid = product_id ? Number(product_id) : null;
+  const p = pid ? db.prepare('SELECT * FROM products WHERE id = ?').get(pid) : null;
+  if (pid && !p) return res.status(404).json({ error: 'Producto no encontrado' });
+  const isAll = all === '1' || all === 'true';
+  const sd = !isAll ? (start_date ? String(start_date).slice(0, 10) : todayStr()) : null;
+  const ed = !isAll ? (end_date ? String(end_date).slice(0, 10) : todayStr()) : null;
+  const prodCond = pid ? ' AND si.product_id = ? ' : '';
+  const dateCond = isAll ? '' : ' AND date(s.created_at) BETWEEN ? AND ? ';
+  const args = [];
+  if (pid) args.push(pid);
+  if (!isAll) args.push(sd, ed);
   const rows = db.prepare(
     `SELECT date(s.created_at) AS day, SUM(si.quantity) AS qty, SUM(si.subtotal) AS total, COUNT(DISTINCT s.id) AS tickets
      FROM sale_items si JOIN sales s ON s.id = si.sale_id
-     WHERE si.product_id = ? AND date(s.created_at) BETWEEN ? AND ?
+     WHERE 1 = 1 ${prodCond}${dateCond}
      GROUP BY date(s.created_at) ORDER BY day`
-  ).all(pid, sd, ed);
+  ).all(...args);
   const summary = db.prepare(
     `SELECT COALESCE(SUM(si.quantity), 0) AS total_qty, COALESCE(SUM(si.subtotal), 0) AS total_revenue, COUNT(DISTINCT s.id) AS total_tickets
      FROM sale_items si JOIN sales s ON s.id = si.sale_id
-     WHERE si.product_id = ? AND date(s.created_at) BETWEEN ? AND ?`
-  ).get(pid, sd, ed);
+     WHERE 1 = 1 ${prodCond}${dateCond}`
+  ).get(...args);
   res.json({
-    product: { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, selling_price: p.selling_price, stock: p.stock },
-    start_date: sd, end_date: ed,
+    product: p ? { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, selling_price: p.selling_price, stock: p.stock } : null,
+    start_date: sd, end_date: ed, all: !!isAll,
     days: rows,
-    summary: { qty: round2(summary.total_qty), revenue: round2(summary.total_revenue), tickets: summary.total_tickets },
+    summary: { qty: round3(summary.total_qty), revenue: round2(summary.total_revenue), tickets: summary.total_tickets },
   });
 });
 
@@ -416,8 +422,8 @@ app.get('/api/reports/product/:id', (req, res) => {
     product: { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, stock: p.stock },
     date: date ? String(date).slice(0, 10) : null,
     movements: rows,
-    entradas: round2(summary.entradas),
-    salidas: round2(summary.salidas),
+    entradas: round3(summary.entradas),
+    salidas: round3(summary.salidas),
   });
 });
 
@@ -434,7 +440,7 @@ app.post('/api/sales', (req, res) => {
 
     const createSale = db.transaction(() => {
       const getProd = db.prepare('SELECT * FROM products WHERE id = ?');
-      const decStock = db.prepare('UPDATE products SET stock = round(stock - ?, 2) WHERE id = ?');
+      const decStock = db.prepare('UPDATE products SET stock = round(stock - ?, 3) WHERE id = ?');
       const session = db.prepare(`SELECT id FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
       const nextTicket = db.prepare(
         `SELECT COALESCE(MAX(ticket_no), 0) + 1 AS n FROM sales WHERE date(created_at) = date('now', 'localtime')`
@@ -450,7 +456,7 @@ app.post('/api/sales', (req, res) => {
       for (const it of items) {
         const p = getProd.get(it.product_id);
         if (!p) throw new Error(`El producto con id ${it.product_id} ya no existe`);
-        const qty = round2(Number(it.quantity));
+        const qty = round3(Number(it.quantity));
         if (!(qty > 0)) throw new Error(`Cantidad inválida para "${p.name}"`);
 
         if (p.is_bote) {
@@ -469,7 +475,7 @@ app.post('/api/sales', (req, res) => {
           for (const ing of ingredients) {
             const bote = getProd.get(ing.boteId);
             if (!bote) throw new Error(`El bote de helado de "${p.name}" ya no existe`);
-            const neededKg = round2((qty * ing.grams) / 1000);
+            const neededKg = round3((qty * ing.grams) / 1000);
             if (neededKg > bote.stock) {
               throw new Error(`El bote de "${bote.name}" no alcanza: necesita ${neededKg} kg y solo hay ${bote.stock} kg`);
             }
@@ -486,7 +492,7 @@ app.post('/api/sales', (req, res) => {
 
         if (ingredients.length > 0) {
           for (const ing of ingredients) {
-            const neededKg = round2((qty * ing.grams) / 1000);
+            const neededKg = round3((qty * ing.grams) / 1000);
             decStock.run(neededKg, ing.boteId);
             insMove.run(ing.boteId, 'salida', neededKg, `Venta de "${p.name}" (ticket #${nextTicket})`);
           }
@@ -622,10 +628,11 @@ app.get('/api/reports/today', (req, res) => {
   ).get(start);
 
   const top = db.prepare(
-    `SELECT si.product_id, MAX(si.product_name) AS name, SUM(si.quantity) AS qty,
+    `SELECT si.product_id, MAX(si.product_name) AS name, MAX(p.unit) AS unit, SUM(si.quantity) AS qty,
             SUM(si.subtotal) AS revenue
      FROM sale_items si
      JOIN sales s ON s.id = si.sale_id
+     JOIN products p ON p.id = si.product_id
      WHERE s.created_at >= ?
      GROUP BY si.product_id
      ORDER BY qty DESC LIMIT 5`
@@ -653,7 +660,7 @@ app.get('/api/reports/today', (req, res) => {
       transactions: summary.transactions,
       total_sales: round2(summary.total_sales),
     },
-    top_products: top.map((t) => ({ ...t, qty: round2(t.qty) })),
+    top_products: top.map((t) => ({ ...t, qty: round3(t.qty) })),
     by_payment_method: byMethod,
     low_stock: lowStock,
     open_session: openSession,

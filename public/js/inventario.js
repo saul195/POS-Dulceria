@@ -49,7 +49,7 @@ async function loadBotes() {
       for (const b of state.botes) {
         const opt = document.createElement('option');
         opt.value = b.id;
-        opt.textContent = `${b.name} (${num(b.stock, 2)} kg)`;
+        opt.textContent = `${b.name} (${stockNum(b.stock, b.unit)} ${b.unit})`;
         sel.appendChild(opt);
       }
     }
@@ -148,8 +148,8 @@ function renderTable(products) {
       <td><b>${p.name}</b> <span class="muted">(${p.unit})</span> ${recipeNote}</td>
       <td>${p.category_name || '<span class="muted">—</span>'}</td>
       <td class="num">${money(p.selling_price)}${p.unit === 'kg' && p.price_per_100g ? `<div class="muted" style="font-size:12px;">${money(p.price_per_100g)}/100g</div>` : ''}</td>
-      <td class="num"><b>${num(p.stock, 2)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
-      <td class="num">${num(p.min_stock, 2)}</td>
+      <td class="num"><b>${stockNum(p.stock, p.unit)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
+      <td class="num">${stockNum(p.min_stock, p.unit)}</td>
       <td class="num">
         <label class="toggle-label" title="${active ? 'Activo' : 'Inactivo'}">
           <input type="checkbox" class="active-toggle" data-id="${p.id}" ${active ? 'checked' : ''}>
@@ -187,7 +187,7 @@ function renderPagination(total) {
 let entryProducts = [];
 let entryProductId = '';
 
-const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const r3 = (n) => Math.round((Number(n) || 0) * 1000) / 1000;
 
 async function openEntryModal() {
   let products;
@@ -224,7 +224,7 @@ function renderEntrySuggestions() {
   box.innerHTML = matches.length
     ? matches.map((p) => `
         <button type="button" class="suggest-item" data-id="${p.id}">
-          <b>${p.name}</b> <span class="muted">(${num(p.stock, 2)} ${p.unit}${p.barcode ? ' · ' + p.barcode : ''})</span>
+          <b>${p.name}</b> <span class="muted">(${stockNum(p.stock, p.unit)} ${p.unit}${p.barcode ? ' · ' + p.barcode : ''})</span>
         </button>`).join('')
     : `<div class="muted" style="padding:8px 4px;">Sin coincidencias.</div>`;
   box.querySelectorAll('.suggest-item').forEach((b) => {
@@ -245,20 +245,20 @@ function selectEntryProduct(p) {
 
 function updateEntryStockInfo() {
   const p = selectedEntryProduct();
-  $('entryCurrentStock').value = p ? r2(p.stock) : '';
+  $('entryCurrentStock').value = p ? r3(p.stock) : '';
   updateEntryCalc();
 }
 
 function updateEntryCalc() {
   const p = selectedEntryProduct();
-  const qty = r2(parseFloat($('entryNewStock').value));
-  const current = p ? r2(p.stock) : 0;
+  const qty = r3(parseFloat($('entryNewStock').value));
+  const current = p ? r3(p.stock) : 0;
   const hint = $('entryCalc');
   if (!(qty > 0)) {
     hint.textContent = `Se suman: 0 · escribe cuánto llega${p ? ` (${p.unit})` : ''}`;
     hint.style.color = 'var(--danger)';
   } else {
-    hint.textContent = `Se suman ${num(qty, 2)} ${p ? p.unit : ''} → quedará ${num(current + qty, 2)} ${p ? p.unit : ''}`;
+    hint.textContent = `Se suman ${stockNum(qty, p ? p.unit : '')} ${p ? p.unit : ''} → quedará ${stockNum(current + qty, p ? p.unit : '')} ${p ? p.unit : ''}`;
     hint.style.color = '';
   }
 }
@@ -279,7 +279,7 @@ function confirmEntryProduct() {
 async function saveStockEntry() {
   const p = selectedEntryProduct();
   if (!p) return toast('Selecciona un producto', 'error');
-  const quantity = r2(parseFloat($('entryNewStock').value));
+  const quantity = r3(parseFloat($('entryNewStock').value));
   if (!(quantity > 0)) return toast('Escribe la cantidad que llega (mayor a 0)', 'error');
   try {
     const r = await api.stock.entry({
@@ -288,7 +288,7 @@ async function saveStockEntry() {
       reason: $('entryReason').value.trim(),
     });
     $('entryModal').classList.remove('show');
-    toast(`Entrada registrada. Stock actual: ${num(r.stock, 2)}`);
+    toast(`Entrada registrada. Stock actual: ${stockNum(r.stock, p.unit)} ${p.unit}`);
     loadProducts();
   } catch (e) {
     toast(e.message, 'error');
@@ -303,7 +303,7 @@ $('entrySearch').addEventListener('keydown', (e) => {
 $('entryNewStock').addEventListener('input', updateEntryCalc);
 $('entryNewStock').addEventListener('blur', () => {
   const v = $('entryNewStock');
-  if (v.value !== '') v.value = r2(parseFloat(v.value));
+  if (v.value !== '') v.value = r3(parseFloat(v.value));
   updateEntryCalc();
 });
 $('entrySave').addEventListener('click', saveStockEntry);

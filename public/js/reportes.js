@@ -95,7 +95,7 @@ async function loadReports() {
           <div class="top-row">
             <span class="top-rank">${i + 1}</span>
             <span class="top-name"><b>${t.name}</b></span>
-            <span class="top-meta">${num(t.qty)} uds · ${moneyMX(t.revenue)}</span>
+            <span class="top-meta">${num(t.qty, 3)} ${t.unit} · ${moneyMX(t.revenue)}</span>
           </div>`).join('')
       : '<div class="muted">Sin ventas hoy.</div>';
 
@@ -104,7 +104,7 @@ async function loadReports() {
       ? r.low_stock.map((p) => `
           <div class="row" style="justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">
             <span><b>${p.name}</b></span>
-            <span class="badge badge-low">${num(p.stock, 2)} / min ${num(p.min_stock, 2)} ${p.unit}</span>
+            <span class="badge badge-low">${stockNum(p.stock, p.unit)} / min ${stockNum(p.min_stock, p.unit)} ${p.unit}</span>
           </div>`).join('')
       : '<div>Sin productos con stock bajo 👍</div>';
 
@@ -321,6 +321,8 @@ function psGetDates() {
   } else if (period === 'year') {
     sd = `${now.getFullYear()}-01-01`;
     ed = today;
+  } else if (period === 'all') {
+    return { all: true };
   } else {
     sd = $('psFrom').value || today;
     ed = $('psTo').value || today;
@@ -346,17 +348,17 @@ function renderPsSuggestions() {
 }
 
 async function loadProductSales() {
-  if (!psSelectedProduct) return;
   const dates = psGetDates();
   try {
-    const r = await api.reports.productSales(psSelectedProduct.id, dates);
+    const r = await api.reports.productSales(psSelectedProduct ? psSelectedProduct.id : null, dates);
     $('psResult').classList.remove('hidden');
     $('psEmpty').classList.add('hidden');
     const p = r.product;
-    $('psProductInfo').innerHTML = `
-      <b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit} · Stock actual: ${num(p.stock, 2)} ${p.unit}</span>`;
+    $('psProductInfo').innerHTML = p
+      ? `<b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit} · Stock actual: ${stockNum(p.stock, p.unit)} ${p.unit}</span>`
+      : `<b>Todas las ventas</b> <span class="muted">${r.all ? 'todo el historial' : `${r.start_date} a ${r.end_date}`}</span>`;
     $('psSummary').innerHTML = `
-      <div class="ps-stat"><div class="label">Unidades vendidas</div><div class="value">${num(r.summary.qty, 2)} ${p.unit}</div></div>
+      <div class="ps-stat"><div class="label">Unidades vendidas</div><div class="value">${p ? `${stockNum(r.summary.qty, p.unit)} ${p.unit}` : num(r.summary.qty, 3)}</div></div>
       <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.revenue)}</div></div>
       <div class="ps-stat"><div class="label">Transacciones</div><div class="value">${r.summary.tickets}</div></div>`;
     const body = $('psBody');
@@ -364,12 +366,12 @@ async function loadProductSales() {
       body.innerHTML = r.days.map((d) => `
         <tr>
           <td>${d.day}</td>
-          <td class="num"><b>${num(d.qty, 2)}</b> ${p.unit}</td>
+          <td class="num"><b>${p ? `${stockNum(d.qty, p.unit)} ${p.unit}` : num(d.qty, 3)}</b></td>
           <td class="num">${d.tickets}</td>
           <td class="num"><b>${moneyMX(d.total)}</b></td>
         </tr>`).join('');
     } else {
-      body.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px;">Sin ventas de este producto en el período seleccionado.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px;">Sin ventas en el período seleccionado.</td></tr>`;
     }
   } catch (e) {
     toast(e.message, 'error');
@@ -406,11 +408,11 @@ document.addEventListener('click', (e) => {
 $('psPeriod').addEventListener('change', () => {
   const isCustom = $('psPeriod').value === 'custom';
   $('psDates').classList.toggle('hidden', !isCustom);
-  if (psSelectedProduct) loadProductSales();
+  loadProductSales();
 });
 
 $('psGo').addEventListener('click', () => {
-  if (psSelectedProduct) loadProductSales();
+  loadProductSales();
 });
 
 if ($('psFrom')) $('psFrom').value = today;
@@ -488,7 +490,7 @@ async function loadStockProducts() {
       b.title = p.barcode || '';
       b.innerHTML = `
         <div class="prod-name">${p.name}</div>
-        <div class="prod-count">${num(p.stock, 2)} ${p.unit}</div>
+        <div class="prod-count">${stockNum(p.stock, p.unit)} ${p.unit}</div>
         <div class="prod-meta">stock actual${p.is_bote ? ' · bote' : ''}</div>`;
       b.addEventListener('click', () => {
         stockProductId = String(p.id) === String(stockProductId) ? '' : String(p.id);
@@ -514,9 +516,9 @@ async function loadStockProductInfo() {
       <div class="product-stock-info">
         <div class="psi-head"><b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${p.unit}</span></div>
         <div class="psi-grid">
-          <div class="psi-box"><div class="label">Entradas hoy</div><div class="value ok">+${num(r.entradas, 2)} ${p.unit}</div></div>
-          <div class="psi-box"><div class="label">Salidas hoy</div><div class="value err">-${num(r.salidas, 2)} ${p.unit}</div></div>
-          <div class="psi-box"><div class="label">Stock que quedó</div><div class="value">${num(p.stock, 2)} ${p.unit}</div></div>
+          <div class="psi-box"><div class="label">Entradas hoy</div><div class="value ok">+${stockNum(r.entradas, p.unit)} ${p.unit}</div></div>
+          <div class="psi-box"><div class="label">Salidas hoy</div><div class="value err">-${stockNum(r.salidas, p.unit)} ${p.unit}</div></div>
+          <div class="psi-box"><div class="label">Stock que quedó</div><div class="value">${stockNum(p.stock, p.unit)} ${p.unit}</div></div>
         </div>
       </div>`;
   } catch (e) {
@@ -540,8 +542,8 @@ async function loadStockMovements() {
         <tr>
           <td>${String(m.created_at).slice(11, 16)}</td>
           <td><b>${m.product_name}</b></td>
-          <td class="num">${m.type === 'entrada' ? `<b class="ok">+${num(m.quantity, 2)} ${m.unit}</b>` : ''}</td>
-          <td class="num">${m.type === 'salida' ? `<b class="err">-${num(m.quantity, 2)} ${m.unit}</b>` : ''}</td>
+          <td class="num">${m.type === 'entrada' ? `<b class="ok">+${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
+          <td class="num">${m.type === 'salida' ? `<b class="err">-${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
           <td class="muted">${m.reason || '—'}</td>
         </tr>`).join('')
       : `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px;">Sin movimientos de stock hoy.</td></tr>`;

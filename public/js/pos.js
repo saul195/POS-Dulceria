@@ -323,14 +323,17 @@ async function charge() {
   chargeBtn.disabled = true;
   chargeBtn.textContent = 'Procesando…';
   try {
-    const items = [...cart.values()].map(({ product, quantity, displayUnit, unitPrice, fixedPrice }) => ({
-      product_id: product.id,
-      quantity,
-      unit_price: unitPrice,
-      line_price: fixedPrice != null ? Math.round(fixedPrice * 100) / 100 : undefined,
-      sale_mode: 'kg',
-      sale_price: unitPrice,
-    }));
+    const items = [...cart.values()].map(({ product, quantity, displayUnit, unitPrice, fixedPrice }) => {
+      const entry = { product, quantity, displayUnit, unitPrice, fixedPrice };
+      return {
+        product_id: product.id,
+        quantity,
+        unit_price: unitPrice,
+        line_price: entrySubtotal(entry),
+        sale_mode: 'kg',
+        sale_price: unitPrice,
+      };
+    });
     const change = payment === 'efectivo' ? Math.round((paid - total) * 100) / 100 : 0;
     const sale = await api.sales.create({
       items,

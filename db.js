@@ -160,9 +160,9 @@ CREATE INDEX IF NOT EXISTS idx_sales_ticket  ON sales(ticket_no);
 `);
 
 db.exec(`
-  UPDATE products SET stock = round(stock, 2), min_stock = round(min_stock, 2);
-  UPDATE stock_movements SET quantity = round(quantity, 2);
-  UPDATE sale_items SET quantity = round(quantity, 2), subtotal = round(subtotal, 2);
+  UPDATE products SET stock = round(stock, 3), min_stock = round(min_stock, 3);
+  UPDATE stock_movements SET quantity = round(quantity, 3);
+  UPDATE sale_items SET quantity = round(quantity, 3), subtotal = round(subtotal, 2);
 `);
 
 module.exports = db;

@@ -504,6 +504,18 @@ td.num, th.num { text-align: right; }
 }
 .prod-card .prod-price { font-size: 18px; font-weight: 800; color: var(--coffee-dark); line-height: 1.2; }
 .prod-card .prod-unit { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-left: 2px; }
+.prod-card .prod-bulk { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.bulk-tag {
+  display: inline-block;
+  background: #ede7f6;
+  color: #5e35b1;
+  border-radius: 99px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .prod-card .prod-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding-bottom: 6px; }
 .prod-card .prod-meta .badge { margin: 0; font-size: 10px; padding: 2px 6px; }
 .prod-card.in-cart { border-color: var(--coffee); background: var(--coffee-light); }

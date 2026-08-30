@@ -105,12 +105,13 @@ function renderGrid() {
         ${cart.has(p.id) ? `<span class="cart-count">${entryDisplay(cart.get(p.id))}${entryUnit(cart.get(p.id))}</span>` : ''}
       </div>
       <div class="prod-price">${money(p.selling_price)}<span class="prod-unit">${isKg ? '/kg' : '/pza'}</span></div>
+      ${isKg && Number(p.price_500g) > 0 ? `<div class="prod-bulk"><span class="bulk-tag">500 g+</span> ${money(p.price_500g)}/kg</div>` : ''}
       <div class="prod-meta">
         <span class="stock-indicator ${stockDot}" title="${out ? 'Agotado' : `Stock: ${p.stock} ${p.unit}`}"></span>
         ${hasRecipe ? `<span class="badge badge-recipe" title="Descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s)">${recipeTotalGrams(p)}g de ${recipeBoteCount(p)} bote(s)</span>` : ''}
       </div>
       <div class="card-actions">
-        ${!out && (!isKg || p.price_per_100g > 0) ? `<button class="act-btn act-plus" data-action="plus" title="Agregar al carrito">+</button>` : ''}
+        ${!out ? `<button class="act-btn act-plus" data-action="plus" title="Agregar al carrito">+</button>` : ''}
       </div>`;
     card.title = hasRecipe
       ? `${p.name} · descuenta ${recipeTotalGrams(p)} g de ${recipeBoteCount(p)} bote(s) de helado`
@@ -136,13 +137,13 @@ function renderCart() {
     item.className = `cart-item${isKg ? ' kg-item' : ''}`;
     if (isKg) {
       const grams = Math.round(quantity * 1000);
-      const pesos = Math.round((quantity * product.selling_price) * 100) / 100;
+      const pesos = Math.round((quantity * entryPrice(entry)) * 100) / 100;
       item.innerHTML = `
         <div class="ci-top">
           <div class="ci-name">${product.name}</div>
           <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar">✕</button>
         </div>
-        <div class="ci-meta">${money(product.selling_price)}/kg · Stock: ${product.stock} kg</div>
+        <div class="ci-meta">${money(entryPrice(entry))}/kg${isBulk(entry) ? ` · <span class="bulk-tag">precio 500 g+</span>` : ''} · Stock: ${product.stock} kg</div>
         <div class="ci-controls">
           <div class="ci-row">
             <span class="ci-prefix">$</span>
@@ -189,7 +190,7 @@ function cartTotal() {
 }
 
 function entrySubtotal(entry) {
-  const raw = entry.fixedPrice != null ? entry.fixedPrice : entry.unitPrice * entry.quantity;
+  const raw = entry.fixedPrice != null ? entry.fixedPrice : entryPrice(entry) * entry.quantity;
   return Math.round(raw);
 }
 
@@ -253,8 +254,17 @@ function entryUnit(entry) {
 
 function entryPrice(entry) {
   const { product } = entry;
+  return priceForQty(product, entry.quantity);
+}
+
+function priceForQty(product, qty) {
+  if (product.unit === 'kg' && qty >= 0.5 && Number(product.price_500g) > 0) {
+    return Number(product.price_500g);
+  }
   return product.selling_price;
 }
+
+const isBulk = (entry) => entry.product.unit === 'kg' && entry.quantity >= 0.5 && Number(entry.product.price_500g) > 0;
 
 function setEntryQty(entry, displayValue) {
   const { product, displayUnit } = entry;
@@ -325,13 +335,14 @@ async function charge() {
   try {
     const items = [...cart.values()].map(({ product, quantity, displayUnit, unitPrice, fixedPrice }) => {
       const entry = { product, quantity, displayUnit, unitPrice, fixedPrice };
+      const effPrice = entryPrice(entry);
       return {
         product_id: product.id,
         quantity,
-        unit_price: unitPrice,
+        unit_price: effPrice,
         line_price: entrySubtotal(entry),
         sale_mode: 'kg',
-        sale_price: unitPrice,
+        sale_price: effPrice,
       };
     });
     const change = payment === 'efectivo' ? Math.round((paid - total) * 100) / 100 : 0;
@@ -463,7 +474,10 @@ $('cartList').addEventListener('input', (e) => {
   if (!entry || entry.product.unit !== 'kg') return;
   const amt = parseFloat(pesosInput.value) || 0;
   if (amt <= 0) return;
-  const newQty = amt / (entry.product.selling_price || 1);
+  let newQty = amt / (entry.product.selling_price || 1);
+  if (newQty >= 0.5 && Number(entry.product.price_500g) > 0) {
+    newQty = amt / (Number(entry.product.price_500g) || entry.product.selling_price || 1);
+  }
   entry.quantity = Math.round(newQty * 1000) / 1000;
   entry.fixedPrice = undefined;
   const gramsEl = pesosInput.closest('.ci-controls').querySelector('.cart-qty');

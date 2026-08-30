@@ -46,11 +46,9 @@ function columnsForWidth(mm) {
 /* ---------- Formato del ticket ---------- */
 function receiptItemLines(it, qtyW, nameW, subW, gap) {
   const name = it.product_name || 'Producto';
-  const is100 = it.sale_mode === '100g' && it.sale_price != null;
-  const qty = is100 ? `${Math.round(it.quantity * 10)}x100g`
-    : it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g`
+  const qty = it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g`
     : fmtM(it.quantity);
-  const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
+  const unit = it.unit === 'kg' ? '' : it.unit;
   const cost = fmtM(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
   let n1 = `${qty}${unit}`;
   let n2 = name;

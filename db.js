@@ -80,10 +80,19 @@ if (!productCols.includes('is_active')) {
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active)');
 
-if (!productCols.includes('price_per_100g')) {
-  db.exec('ALTER TABLE products ADD COLUMN price_per_100g REAL');
-  console.log('[db] Columna price_per_100g agregada a products');
+if (productCols.includes('price_per_100g')) {
+  db.exec('ALTER TABLE products DROP COLUMN price_per_100g');
+  console.log('[db] Columna price_per_100g eliminada de products');
 }
+if (!productCols.includes('price_500g')) {
+  db.exec('ALTER TABLE products ADD COLUMN price_500g REAL');
+  console.log('[db] Columna price_500g agregada a products');
+}
+if (!productCols.includes('container_product_id')) {
+  db.exec('ALTER TABLE products ADD COLUMN container_product_id INTEGER');
+  console.log('[db] Columna container_product_id agregada a products');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_products_container ON products(container_product_id)');
 
 if (productCols.includes('cost_price')) {
   db.exec('ALTER TABLE products DROP COLUMN cost_price');

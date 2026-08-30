@@ -21,9 +21,8 @@ function renderTicket(sale, opts = {}) {
   for (const it of sale.items) {
     const name = it.product_name || 'Producto';
     const nameShort = name.length > 20 ? name.slice(0, 20) : name;
-    const is100 = it.sale_mode === '100g' && it.sale_price != null;
-    const qty = is100 ? `${Math.round(it.quantity * 10)}×100g` : (it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : padZ(it.quantity));
-    const unit = is100 ? '' : (it.unit === 'kg' ? '' : it.unit);
+    const qty = it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : padZ(it.quantity);
+    const unit = it.unit === 'kg' ? '' : it.unit;
     const cost = padZ(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
     let n1 = `${qty}${unit}`;
     let n2 = nameShort;

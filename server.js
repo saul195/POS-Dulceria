@@ -131,11 +131,11 @@ app.post('/api/products/import', (req, res) => {
   const insCat = db.prepare('INSERT INTO categories (name, description) VALUES (?, ?)');
   const getProd = db.prepare('SELECT id FROM products WHERE barcode = ?');
   const insert = db.prepare(
-    `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_per_100g, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, container_product_id, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const update = db.prepare(
-    `UPDATE products SET name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_per_100g = ?, is_active = ?
+    `UPDATE products SET name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, container_product_id = ?, is_active = ?
      WHERE id = ?`
   );
 
@@ -169,7 +169,8 @@ app.post('/api/products/import', (req, res) => {
         round3(Number(r.stock) || 0),
         round3(Number(r.min_stock) || 0),
         String(r.unit || 'pza'),
-        r.price_per_100g != null && r.price_per_100g !== '' ? round2(Number(r.price_per_100g)) : null,
+        r.price_500g != null && r.price_500g !== '' ? round2(Number(r.price_500g)) : null,
+        r.container_product_id != null && Number(r.container_product_id) ? Number(r.container_product_id) : null,
       ];
       if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), existing.id); updated++; }
       else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0)); inserted++; }
@@ -205,8 +206,8 @@ app.post('/api/products', (req, res) => {
   if (!String(b.name || '').trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
   try {
     const info = db.prepare(
-      `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_per_100g, is_active, is_bote, recipe_grams, recipe_bote_id, recipe_grams2, recipe_bote_id2)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, container_product_id, is_active, is_bote, recipe_grams, recipe_bote_id, recipe_grams2, recipe_bote_id2)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       String(b.barcode || '').trim() || `GEN-${Date.now()}`,
       String(b.name).trim(),
@@ -215,7 +216,8 @@ app.post('/api/products', (req, res) => {
       round3(Number(b.stock) || 0),
       round3(Number(b.min_stock) || 0),
       String(b.unit || 'pza'),
-      b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
+      b.price_500g != null && b.price_500g !== '' ? round2(Number(b.price_500g)) : null,
+      b.container_product_id ? Number(b.container_product_id) : null,
       b.is_active === undefined ? 1 : (b.is_active ? 1 : 0),
       b.is_bote ? 1 : 0,
       Number(b.recipe_grams) || 0,
@@ -236,7 +238,7 @@ app.put('/api/products/:id', (req, res) => {
   const b = req.body || {};
   try {
     db.prepare(
-      `UPDATE products SET barcode = ?, name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_per_100g = ?, is_active = ?, is_bote = ?, recipe_grams = ?, recipe_bote_id = ?, recipe_grams2 = ?, recipe_bote_id2 = ?
+      `UPDATE products SET barcode = ?, name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, container_product_id = ?, is_active = ?, is_bote = ?, recipe_grams = ?, recipe_bote_id = ?, recipe_grams2 = ?, recipe_bote_id2 = ?
        WHERE id = ?`
     ).run(
       String(b.barcode ?? p.barcode).trim(),
@@ -246,7 +248,8 @@ app.put('/api/products/:id', (req, res) => {
       round3(Number(b.stock ?? p.stock)),
       round3(Number(b.min_stock ?? p.min_stock)),
       String(b.unit ?? p.unit),
-      b.price_per_100g != null && b.price_per_100g !== '' ? round2(Number(b.price_per_100g)) : null,
+      b.price_500g != null && b.price_500g !== '' ? round2(Number(b.price_500g)) : (p.price_500g != null ? p.price_500g : null),
+      b.container_product_id !== undefined ? (b.container_product_id ? Number(b.container_product_id) : null) : (p.container_product_id || null),
       b.is_active === undefined ? p.is_active : (b.is_active ? 1 : 0),
       b.is_bote === undefined ? p.is_bote : (b.is_bote ? 1 : 0),
       b.recipe_grams !== undefined ? (Number(b.recipe_grams) || 0) : (p.recipe_grams || 0),
@@ -334,6 +337,7 @@ app.delete('/api/sales/:id', (req, res) => {
       } else {
         restock.run(it.quantity, p.id);
       }
+      if (p.container_product_id) restock.run(it.quantity, p.container_product_id);
     }
     db.prepare('DELETE FROM stock_movements WHERE reason LIKE ? AND date(created_at) = ?')
       .run(`%(ticket #${sale.ticket_no})%`, String(sale.created_at).slice(0, 10));
@@ -521,11 +525,20 @@ app.post('/api/sales', (req, res) => {
           throw new Error(`Stock insuficiente de "${p.name}". Disponible: ${p.stock} ${p.unit}`);
         }
 
-        const unitPrice = round2(Number(it.unit_price) || p.selling_price);
-        const saleMode = it.sale_mode === '100g' ? '100g' : 'kg';
-        const salePrice = saleMode === '100g' ? round2(Number(it.sale_price) || p.selling_price) : unitPrice;
+        if (p.container_product_id) {
+          const cont = getProd.get(p.container_product_id);
+          if (cont && cont.id === p.id) throw new Error(`El contenedor de "${p.name}" no puede ser el propio producto`);
+          if (cont && qty > cont.stock) {
+            throw new Error(`No alcanzan los contenedores de "${cont.name}": necesita ${qty} ${cont.unit} y solo hay ${cont.stock}`);
+          }
+        }
+
+        const bulkUnit = p.unit === 'kg' && qty >= 0.5 && p.price_500g != null && Number(p.price_500g) > 0;
+        const unitPrice = bulkUnit ? round2(Number(p.price_500g)) : round2(Number(it.unit_price) || p.selling_price);
+        const saleMode = 'kg';
+        const salePrice = unitPrice;
         const linePrice = it.line_price != null && Number(it.line_price) > 0 ? round2(Number(it.line_price)) : null;
-        const subtotal = linePrice != null ? linePrice : round2(unitPrice * qty);
+        const subtotal = bulkUnit ? round2(unitPrice * qty) : (linePrice != null ? linePrice : round2(unitPrice * qty));
 
         if (ingredients.length > 0) {
           for (const ing of ingredients) {
@@ -536,6 +549,14 @@ app.post('/api/sales', (req, res) => {
         } else {
           decStock.run(qty, p.id);
           insMove.run(p.id, 'salida', qty, `Venta (ticket #${nextTicket})`);
+        }
+
+        if (p.container_product_id) {
+          const cont = getProd.get(p.container_product_id);
+          if (cont) {
+            decStock.run(qty, cont.id);
+            insMove.run(cont.id, 'salida', qty, `Contenedor de "${p.name}" (ticket #${nextTicket})`);
+          }
         }
 
         total += subtotal;

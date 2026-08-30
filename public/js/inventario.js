@@ -53,6 +53,22 @@ async function loadBotes() {
         sel.appendChild(opt);
       }
     }
+    const contSel = $('fContainer');
+    if (contSel) {
+      contSel.innerHTML = '';
+      const o = document.createElement('option');
+      o.value = '';
+      o.textContent = '— Sin contenedor —';
+      contSel.appendChild(o);
+      const containers = all.filter((p) => !p.is_bote);
+      state.containerNames = Object.fromEntries(containers.map((p) => [p.id, p.name]));
+      for (const c of containers) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.name} (${stockNum(c.stock, c.unit)} ${c.unit})`;
+        contSel.appendChild(opt);
+      }
+    }
   } catch (e) { /* el selector de botes quedará vacío */ }
 }
 
@@ -139,15 +155,18 @@ function renderTable(products) {
       : p.recipe_grams > 0
         ? `<span class="badge" style="background:#e8f5e9;color:#2e7d32;">${p.recipe_grams} g${p.recipe_grams2 > 0 ? ` + ${p.recipe_grams2} g` : ''} de bote</span>`
         : '';
+    const containerNote = p.container_product_id && !p.is_bote
+      ? `<span class="badge" style="background:#f3e5f5;color:#6a1b9a;">descuenta ${(state.containerNames || {})[p.container_product_id] || 'contenedor'}</span>`
+      : '';
     const tr = document.createElement('tr');
     tr.dataset.low = low ? '1' : '0';
     if (!active) tr.style.opacity = '0.55';
     if (low) tr.style.background = 'var(--danger-bg)';
     tr.innerHTML = `
       <td class="muted">${p.barcode}</td>
-      <td><b>${p.name}</b> <span class="muted">(${p.unit})</span> ${recipeNote}</td>
+      <td><b>${p.name}</b> <span class="muted">(${p.unit})</span> ${recipeNote}${containerNote}</td>
       <td>${p.category_name || '<span class="muted">—</span>'}</td>
-      <td class="num">${money(p.selling_price)}${p.unit === 'kg' && p.price_per_100g ? `<div class="muted" style="font-size:12px;">${money(p.price_per_100g)}/100g</div>` : ''}</td>
+      <td class="num">${money(p.selling_price)}${p.unit === 'kg' && Number(p.price_500g) > 0 ? `<div class="muted" style="font-size:12px;">${money(p.price_500g)}/kg desde 500 g</div>` : ''}</td>
       <td class="num"><b>${stockNum(p.stock, p.unit)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
       <td class="num">${stockNum(p.min_stock, p.unit)}</td>
       <td class="num">
@@ -316,7 +335,7 @@ async function openProductModal(product = null) {
   const title = $('modalTitle');
   const form = {
     name: $('fName'), barcode: $('fBarcode'), category: $('fCategory'),
-    price: $('fPrice'), price100: $('fPrice100'),
+    price: $('fPrice'),
     stock: $('fStock'), minStock: $('fMinStock'), unit: $('fUnit'),
   };
   fillSelect(form.category, state.categories);
@@ -326,7 +345,7 @@ async function openProductModal(product = null) {
     form.barcode.value = product.barcode;
     form.category.value = product.category_id || '';
     form.price.value = product.selling_price;
-    form.price100.value = product.price_per_100g != null && product.price_per_100g !== '' ? product.price_per_100g : '';
+    $('fPrice500').value = product.price_500g != null && product.price_500g !== '' ? product.price_500g : '';
     form.stock.value = product.stock;
     form.minStock.value = product.min_stock;
     form.unit.value = product.unit;
@@ -335,11 +354,13 @@ async function openProductModal(product = null) {
     $('fRecipeGrams').value = product.recipe_grams || '';
     $('fRecipeBote2').value = product.recipe_bote_id2 || '';
     $('fRecipeGrams2').value = product.recipe_grams2 || '';
+    $('fContainer').value = product.container_product_id || '';
     $('productModal').dataset.editingId = product.id;
   } else {
     title.textContent = 'Nuevo producto';
     form.name.value = ''; form.barcode.value = ''; form.category.value = '';
-    form.price.value = ''; form.price100.value = '';
+    form.price.value = ''; 
+    $('fPrice500').value = '';
     form.stock.value = ''; form.minStock.value = '';
     form.unit.value = 'pza';
     $('fIsBote').checked = false;
@@ -347,20 +368,22 @@ async function openProductModal(product = null) {
     $('fRecipeGrams').value = '';
     $('fRecipeBote2').value = '';
     $('fRecipeGrams2').value = '';
+    $('fContainer').value = '';
     $('productModal').dataset.editingId = '';
   }
-  updatePrice100Visibility();
+  updatePrice500Visibility();
   updateRecipeVisibility();
   $('productModal').classList.add('show');
   renderBarcodePreview();
   setTimeout(() => form.name.focus(), 50);
 }
 
-function updatePrice100Visibility() {
-  $('price100Wrap').classList.toggle('hidden', $('fUnit').value.trim() !== 'kg');
+function updatePrice500Visibility() {
+  const isKg = $('fUnit').value.trim() === 'kg';
+  $('price500Wrap').classList.toggle('hidden', !isKg);
 }
 
-$('fUnit').addEventListener('input', updatePrice100Visibility);
+$('fUnit').addEventListener('input', updatePrice500Visibility);
 $('fCategory').addEventListener('change', updateRecipeVisibility);
 $('fIsBote').addEventListener('change', updateRecipeVisibility);
 
@@ -372,11 +395,12 @@ async function saveProduct() {
     barcode: $('fBarcode').value.trim(),
     category_id: $('fCategory').value || null,
     selling_price: parseFloat($('fPrice').value) || 0,
-    price_per_100g: $('fPrice100').value !== '' ? parseFloat($('fPrice100').value) : null,
+    price_500g: $('fUnit').value.trim() === 'kg' && $('fPrice500').value !== '' ? parseFloat($('fPrice500').value) : null,
     stock: parseFloat($('fStock').value) || 0,
     min_stock: parseFloat($('fMinStock').value) || 0,
     unit: $('fUnit').value.trim() || 'pza',
     is_bote: $('fIsBote').checked ? 1 : 0,
+    container_product_id: $('fContainer').value ? Number($('fContainer').value) : null,
     recipe_grams: $('fRecipeGrams').value !== '' ? parseFloat($('fRecipeGrams').value) || 0 : 0,
     recipe_bote_id: $('fRecipeBote').value ? Number($('fRecipeBote').value) : null,
     recipe_grams2: $('fRecipeGrams2').value !== '' ? parseFloat($('fRecipeGrams2').value) || 0 : 0,
@@ -384,8 +408,11 @@ async function saveProduct() {
   };
   if (!body.name) return toast('El nombre es obligatorio', 'error');
   if (!body.barcode) return toast('El código de barras es obligatorio', 'error');
-  if (body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2)) {
-    return toast('Un bote de helado no puede tener receta (descuenta de sí mismo).', 'error');
+  if (body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2 || body.container_product_id)) {
+    return toast('Un bote de helado no puede tener receta ni contenedor (descuenta de sí mismo).', 'error');
+  }
+  if (body.container_product_id && String(body.container_product_id) === String(id)) {
+    return toast('El contenedor no puede ser el mismo producto.', 'error');
   }
   if (body.recipe_bote_id2 && !(body.recipe_grams2 > 0)) {
     return toast('Indica los gramos del 2º bote.', 'error');
@@ -393,7 +420,7 @@ async function saveProduct() {
   if (!body.is_bote && isHeladosCat(body.category_id) && (!body.recipe_bote_id || !(body.recipe_grams > 0))) {
     return toast('Indica el bote del que descuenta y los gramos por pieza.', 'error');
   }
-  if (!body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2)) {
+  if (!body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2 || body.container_product_id)) {
     body.stock = 0;
     body.min_stock = 0;
   }

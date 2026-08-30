@@ -109,14 +109,19 @@
           <input type="number" id="fRecipeGrams2" step="1" min="0">
           <div class="hint">Ej. combinado = 60 g de vainilla + 60 g de chocolate. Si es vacío, solo se usa el 1er bote.</div>
         </div>
+        <div class="form-field full recipe-helado-wrap hidden">
+          <label>Contenedor que se descuenta al vender <span class="muted">(opcional)</span></label>
+          <select id="fContainer"></select>
+          <div class="hint">Ej. el barquillo o la canasta (producto con su propio stock): por cada pieza vendida se descuenta 1 de ese producto.</div>
+        </div>
         <div class="form-field full">
           <label>Precio de venta ($)</label>
           <input type="number" id="fPrice" step="0.01" min="0">
         </div>
-        <div class="form-field full" id="price100Wrap">
-          <label>Precio por 100 g ($) <span class="muted">(opcional, solo unidad kg)</span></label>
-          <input type="number" id="fPrice100" step="0.01" min="0">
-          <div class="hint">Si lo defines, en Vender podrás cobrar por paquetes de 100 g con este precio.</div>
+        <div class="form-field full" id="price500Wrap">
+          <label>Precio por kg a partir de 500 g ($) <span class="muted">(opcional, solo unidad kg)</span></label>
+          <input type="number" id="fPrice500" step="0.01" min="0">
+          <div class="hint">Si se venden 500 g o más de este producto, se cobra este precio por kg (tipo mayoreo). Si está vacío, se usa el precio normal.</div>
         </div>
         <div class="form-field">
           <label>Stock</label>

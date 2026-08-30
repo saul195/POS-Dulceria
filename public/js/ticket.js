@@ -6,6 +6,10 @@ function pad(n, w) { return String(n).padStart(w, '0'); }
 
 function padZ(n) { return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+function fmtPza(n) {
+  return String(Math.round(Number(n) * 100) / 100);
+}
+
 function line(...parts) {
   return parts.map((p) => p || '').join('');
 }
@@ -21,7 +25,7 @@ function renderTicket(sale, opts = {}) {
   for (const it of sale.items) {
     const name = it.product_name || 'Producto';
     const nameShort = name.length > 20 ? name.slice(0, 20) : name;
-    const qty = it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : padZ(it.quantity);
+    const qty = it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g` : fmtPza(it.quantity);
     const unit = it.unit === 'kg' ? '' : it.unit;
     const cost = padZ(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
     let n1 = `${qty}${unit}`;

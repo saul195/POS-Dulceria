@@ -5,6 +5,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const padL = (s, w) => String(s).slice(0, w).padEnd(w);
 const padR = (s, w) => String(s).slice(0, w).padStart(w);
 const fmtM = (n) => Number(n || 0).toFixed(2);
+const fmtPieza = (n) => String(Math.round(Number(n) * 100) / 100);
 
 /* ---------- Codepage PC850 (caracteres en español) ---------- */
 const CP850 = [
@@ -47,7 +48,7 @@ function columnsForWidth(mm) {
 function receiptItemLines(it, qtyW, nameW, subW, gap) {
   const name = it.product_name || 'Producto';
   const qty = it.unit === 'kg' ? `${Math.round(it.quantity * 1000)}g`
-    : fmtM(it.quantity);
+    : fmtPieza(it.quantity);
   const unit = it.unit === 'kg' ? '' : it.unit;
   const cost = fmtM(it.subtotal != null ? it.subtotal : (it.unit_price * it.quantity));
   let n1 = `${qty}${unit}`;

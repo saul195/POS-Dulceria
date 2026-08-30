@@ -46,6 +46,7 @@ const api = {
       return api.get(`/api/sales?${qs}`);
     },
     get: (id) => api.get(`/api/sales/${id}`),
+    remove: (id, key) => api.request('DELETE', `/api/sales/${id}`, { key }),
   },
   reports: {
     today: () => api.get('/api/reports/today'),

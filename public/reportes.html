@@ -36,13 +36,21 @@
         <div class="card" id="salesCard">
           <div class="card-head">
             <h2 style="margin:0;">Transacciones del día</h2>
-            <label class="toggle-label" title="Mostrar u ocultar las transacciones del día">
-              <input type="checkbox" id="salesToggle" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Activa</span>
-            </label>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button class="btn btn-outline btn-sm" id="adminKeyBtn" title="Modo administrador: activa la opción de eliminar ventas (requiere clave)" style="margin:0;">Duela</button>
+              <label class="toggle-label" title="Mostrar u ocultar las transacciones del día">
+                <input type="checkbox" id="salesToggle" checked>
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Activa</span>
+              </label>
+            </div>
           </div>
           <div id="salesContent">
+            <div class="sales-search" style="display:flex;gap:8px;margin-bottom:10px;">
+              <input type="search" id="salesSearch" placeholder="Buscar por # de ticket…" autocomplete="off"
+                     style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;">
+              <button class="btn btn-sm" id="salesSearchBtn">Buscar</button>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>

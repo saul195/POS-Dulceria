@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 const dNow = new Date();
 const today = `${dNow.getFullYear()}-${String(dNow.getMonth() + 1).padStart(2, '0')}-${String(dNow.getDate()).padStart(2, '0')}`;
 let salesPage = 1;
+let salesSearch = '';
 const SALES_PAGE_SIZE = 15;
 
 /* ---------------- Carga de datos ---------------- */
@@ -116,7 +117,7 @@ async function loadReports() {
 
 async function loadSales() {
   try {
-    const data = await api.sales.list({ date: today, page: salesPage, pageSize: SALES_PAGE_SIZE });
+    const data = await api.sales.list({ date: today, search: salesSearch, page: salesPage, pageSize: SALES_PAGE_SIZE });
     const body = $('salesBody');
     body.innerHTML = data.sales.length
       ? data.sales.map((s) => `
@@ -129,9 +130,10 @@ async function loadSales() {
           <td class="num">
             <button class="btn btn-outline btn-sm view-btn" data-id="${s.id}">Ver ticket</button>
             <button class="btn btn-outline btn-sm reprint-btn" data-id="${s.id}" title="Reimprimir el ticket en la impresora">Reimprimir</button>
+            ${adminMode ? `<button class="btn btn-danger btn-sm del-btn" data-id="${s.id}" data-ticket="${s.ticket_no || s.id}" title="Eliminar la venta">Eliminar</button>` : ''}
           </td>
         </tr>`).join('')
-      : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px;">Sin ventas registradas hoy.</td></tr>`;
+      : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px;">${salesSearch ? `Sin ventas que coincidan con "${salesSearch}".` : 'Sin ventas registradas hoy.'}</td></tr>`;
 
     const wrap = $('salesPagination');
     const totalPages = Math.max(1, Math.ceil(data.total / SALES_PAGE_SIZE));
@@ -232,6 +234,23 @@ function renderCash(session) {
 /* ---------------- Detalle de ticket ---------------- */
 
 $('salesBody').addEventListener('click', async (e) => {
+  const delBtn = e.target.closest('.del-btn');
+  if (delBtn) {
+    e.stopPropagation();
+    const id = delBtn.dataset.id;
+    const ticket = delBtn.dataset.ticket;
+    confirmDialog(`¿Eliminar la venta #${String(ticket).padStart(6, '0')}? Se restaurará el stock de los productos vendidos y se quitará de los reportes.`, async () => {
+      try {
+        await api.sales.remove(id, SECRET_KEY);
+        toast(`Venta #${String(ticket).padStart(6, '0')} eliminada. Stock restaurado.`);
+        loadReports();
+        loadSales();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+    return;
+  }
   const viewBtn = e.target.closest('.view-btn');
   const repBtn = e.target.closest('.reprint-btn');
   if (!viewBtn && !repBtn) return;
@@ -247,6 +266,60 @@ $('salesBody').addEventListener('click', async (e) => {
     toast(err.message, 'error');
   }
 });
+
+const SECRET_KEY = 'villalegre195';
+let adminMode = false;
+
+function syncAdminBtn() {
+  const btn = $('adminKeyBtn');
+  if (!btn) return;
+  btn.classList.toggle('btn-danger', adminMode);
+  btn.classList.toggle('btn-outline', !adminMode);
+  btn.textContent = adminMode ? 'Salir duela' : 'Duela';
+}
+
+$('adminKeyBtn').addEventListener('click', () => {
+  if (adminMode) {
+    adminMode = false;
+    syncAdminBtn();
+    loadSales();
+    return;
+  }
+  const modal = openModal(`
+    <h3>Modo administrador</h3>
+    <p class="muted mb">Ingresa la clave secreta para activar la opción de eliminar ventas.</p>
+    <div class="form-field mb">
+      <label>Clave secreta</label>
+      <input type="password" id="adminKeyInput" autocomplete="off" placeholder="Clave">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cxlAdmin">Cancelar</button>
+      <button class="btn btn-success" id="okAdmin">Activar</button>
+    </div>`, 'adminModal');
+  const close = () => closeModal(modal.closest('.modal-backdrop'));
+  modal.querySelector('#cxlAdmin').addEventListener('click', close);
+  const input = modal.querySelector('#adminKeyInput');
+  input.focus();
+  const activate = () => {
+    if (input.value !== SECRET_KEY) return toast('Clave incorrecta', 'error');
+    adminMode = true;
+    syncAdminBtn();
+    close();
+    loadSales();
+  };
+  modal.querySelector('#okAdmin').addEventListener('click', activate);
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); activate(); } });
+});
+
+const applySalesSearch = () => {
+  salesSearch = $('salesSearch').value.trim();
+  salesPage = 1;
+  loadSales();
+};
+$('salesSearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); applySalesSearch(); }
+});
+$('salesSearchBtn').addEventListener('click', applySalesSearch);
 
 initChartControls();
 loadReports();

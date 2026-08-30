@@ -276,12 +276,16 @@ app.post('/api/products/delete-all', (req, res) => {
 /* ============================ VENTAS ============================ */
 
 app.get('/api/sales', (req, res) => {
-  const { date, page = 1, pageSize = 20 } = req.query;
+  const { date, search, page = 1, pageSize = 20 } = req.query;
   const where = [];
   const params = [];
   if (date) {
     where.push("date(s.created_at) = ?");
     params.push(String(date).slice(0, 10));
+  }
+  if (search && String(search).trim()) {
+    where.push("CAST(s.ticket_no AS TEXT) LIKE ?");
+    params.push(`%${String(search).trim()}%`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const count = db.prepare(`SELECT COUNT(*) AS total FROM sales s ${whereSql}`).get(...params).total;
@@ -304,6 +308,39 @@ app.get('/api/sales/:id', (req, res) => {
      WHERE si.sale_id = ? ORDER BY si.id`
   ).all(sale.id);
   res.json({ ...sale, items });
+});
+
+const SECRET_KEY = 'villalegre195';
+
+app.delete('/api/sales/:id', (req, res) => {
+  if (String((req.body || {}).key || '') !== SECRET_KEY) {
+    return res.status(403).json({ error: 'Clave secreta incorrecta' });
+  }
+  const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(req.params.id);
+  if (!sale) return res.status(404).json({ error: 'Venta no encontrada' });
+
+  const removeSale = db.transaction(() => {
+    const getProd = db.prepare('SELECT * FROM products WHERE id = ?');
+    const restock = db.prepare('UPDATE products SET stock = round(stock + ?, 3) WHERE id = ?');
+    const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(sale.id);
+    for (const it of items) {
+      const p = getProd.get(it.product_id);
+      if (!p) continue;
+      const ingredients = [];
+      if (p.recipe_bote_id && p.recipe_grams > 0) ingredients.push({ boteId: p.recipe_bote_id, grams: p.recipe_grams });
+      if (p.recipe_bote_id2 && p.recipe_grams2 > 0) ingredients.push({ boteId: p.recipe_bote_id2, grams: p.recipe_grams2 });
+      if (ingredients.length > 0) {
+        for (const ing of ingredients) restock.run(round3((it.quantity * ing.grams) / 1000), ing.boteId);
+      } else {
+        restock.run(it.quantity, p.id);
+      }
+    }
+    db.prepare('DELETE FROM stock_movements WHERE reason LIKE ? AND date(created_at) = ?')
+      .run(`%(ticket #${sale.ticket_no})%`, String(sale.created_at).slice(0, 10));
+    db.prepare('DELETE FROM sales WHERE id = ?').run(sale.id);
+  })();
+
+  res.json({ ok: true, message: `Venta #${sale.ticket_no || sale.id} eliminada y stock restaurado.` });
 });
 
 /* ============================ MOVIMIENTOS DE STOCK ============================ */

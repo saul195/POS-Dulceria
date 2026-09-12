@@ -91,6 +91,12 @@
           </label>
           <div class="hint">Un bote almacena el helado (stock en kg). Los helados con receta descuentan de un bote.</div>
         </div>
+        <div class="form-field full">
+          <label class="checkbox-line">
+            <input type="checkbox" id="fHideWhatsapp"> <b>No mostrar en WhatsApp</b>
+          </label>
+          <div class="hint">Si está activo, este producto no aparecerá en los mensajes de alerta de stock bajo de WhatsApp.</div>
+        </div>
         <div class="form-field full recipe-helado-wrap hidden">
           <label>Receta: bote de helado del que se descuenta</label>
           <select id="fRecipeBote"></select>
@@ -122,6 +128,20 @@
           <label>Precio por kg a partir de 500 g ($) <span class="muted">(opcional, solo unidad kg)</span></label>
           <input type="number" id="fPrice500" step="0.01" min="0">
           <div class="hint">Si se venden 500 g o más de este producto, se cobra este precio por kg (tipo mayoreo). Si está vacío, se usa el precio normal.</div>
+        </div>
+        <div class="form-field full" id="boxWrap">
+          <label>Venta por caja <span class="muted">(opcional, solo unidad pza)</span></label>
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Precio por caja ($)</label>
+              <input type="number" id="fBoxPrice" step="0.01" min="0">
+            </div>
+            <div class="form-field">
+              <label>Piezas por caja</label>
+              <input type="number" id="fBoxPieces" step="1" min="1">
+            </div>
+          </div>
+          <div class="hint">Si vendes este producto por caja, el cajero podrá usar "Vender caja" en el carrito: se cobra este precio y se descuentan las piezas indicadas del stock.</div>
         </div>
         <div class="form-field">
           <label>Stock</label>

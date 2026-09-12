@@ -621,6 +621,46 @@ td.num, th.num { text-align: right; }
 .qty-btn:hover { border-color: var(--accent); background: var(--accent-light); }
 .qty-btn:active { transform: scale(.92); }
 
+.btn-100g {
+  align-self: flex-start;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.btn-100g:hover { background: var(--accent-light); }
+
+.btn-box {
+  align-self: flex-start;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.btn-box:hover { background: var(--accent-light); }
+.btn-box.off { color: var(--danger); border-color: var(--danger); }
+.btn-box.off:hover { background: var(--danger-bg); }
+
+.box-sell-chip {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success);
+  background: var(--success-bg);
+  border-radius: 6px;
+}
+
 .quick-pay { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .quick-pay .btn { flex: 1 1 auto; min-width: 56px; padding: 8px 10px; font-size: 14px; }
 .quick-pay .btn.pressed { background: var(--success); color: #fff; transform: scale(.96); }

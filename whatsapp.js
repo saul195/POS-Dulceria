@@ -106,7 +106,7 @@ let stopping = false;
 function buildLowStockMessage() {
   const rows = db.prepare(
     `SELECT name, barcode, stock, min_stock, unit FROM products
-     WHERE stock <= min_stock AND is_active = 1 ORDER BY name`
+     WHERE stock <= min_stock AND is_active = 1 AND hide_whatsapp = 0 ORDER BY name`
   ).all();
   if (!rows.length) return null;
   const d = new Date();

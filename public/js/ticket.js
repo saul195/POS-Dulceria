@@ -63,7 +63,7 @@ function renderTicket(sale, opts = {}) {
       ${paymentLine}
     </table>
     <div class="t-sep"></div>
-    <div class="tc">* GRACIAS POR SU COMPRA *</div>
+    <div class="tc">* GRACIAS POR TU ALEGRE COMPRA *</div>
   </div>`;
 }
 

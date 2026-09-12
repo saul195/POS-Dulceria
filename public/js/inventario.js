@@ -166,7 +166,7 @@ function renderTable(products) {
       <td class="muted">${p.barcode}</td>
       <td><b>${p.name}</b> <span class="muted">(${p.unit})</span> ${recipeNote}${containerNote}</td>
       <td>${p.category_name || '<span class="muted">—</span>'}</td>
-      <td class="num">${money(p.selling_price)}${p.unit === 'kg' && Number(p.price_500g) > 0 ? `<div class="muted" style="font-size:12px;">${money(p.price_500g)}/kg desde 500 g</div>` : ''}</td>
+      <td class="num">${money(p.selling_price)}${p.unit === 'kg' && Number(p.price_500g) > 0 ? `<div class="muted" style="font-size:12px;">${money(p.price_500g)}/kg desde 500 g</div>` : ''}${p.unit === 'pza' && Number(p.pieces_per_box) > 0 ? `<div class="muted" style="font-size:12px;">${money(p.box_price)}/caja · ${Number(p.pieces_per_box)} pza</div>` : ''}</td>
       <td class="num"><b>${stockNum(p.stock, p.unit)}</b> ${low ? '<span class="badge badge-low">bajo</span>' : ''}</td>
       <td class="num">${stockNum(p.min_stock, p.unit)}</td>
       <td class="num">
@@ -346,10 +346,13 @@ async function openProductModal(product = null) {
     form.category.value = product.category_id || '';
     form.price.value = product.selling_price;
     $('fPrice500').value = product.price_500g != null && product.price_500g !== '' ? product.price_500g : '';
+    $('fBoxPrice').value = product.box_price != null && product.box_price !== '' ? product.box_price : '';
+    $('fBoxPieces').value = product.pieces_per_box || '';
     form.stock.value = product.stock;
     form.minStock.value = product.min_stock;
     form.unit.value = product.unit;
     $('fIsBote').checked = !!product.is_bote;
+    $('fHideWhatsapp').checked = !!product.hide_whatsapp;
     $('fRecipeBote').value = product.recipe_bote_id || '';
     $('fRecipeGrams').value = product.recipe_grams || '';
     $('fRecipeBote2').value = product.recipe_bote_id2 || '';
@@ -361,9 +364,12 @@ async function openProductModal(product = null) {
     form.name.value = ''; form.barcode.value = ''; form.category.value = '';
     form.price.value = ''; 
     $('fPrice500').value = '';
+    $('fBoxPrice').value = '';
+    $('fBoxPieces').value = '';
     form.stock.value = ''; form.minStock.value = '';
     form.unit.value = 'pza';
     $('fIsBote').checked = false;
+    $('fHideWhatsapp').checked = false;
     $('fRecipeBote').value = '';
     $('fRecipeGrams').value = '';
     $('fRecipeBote2').value = '';
@@ -372,6 +378,7 @@ async function openProductModal(product = null) {
     $('productModal').dataset.editingId = '';
   }
   updatePrice500Visibility();
+  updateBoxVisibility();
   updateRecipeVisibility();
   $('productModal').classList.add('show');
   renderBarcodePreview();
@@ -383,7 +390,12 @@ function updatePrice500Visibility() {
   $('price500Wrap').classList.toggle('hidden', !isKg);
 }
 
-$('fUnit').addEventListener('input', updatePrice500Visibility);
+function updateBoxVisibility() {
+  const isPza = $('fUnit').value.trim() === 'pza';
+  $('boxWrap').classList.toggle('hidden', !isPza);
+}
+
+$('fUnit').addEventListener('input', () => { updatePrice500Visibility(); updateBoxVisibility(); });
 $('fCategory').addEventListener('change', updateRecipeVisibility);
 $('fIsBote').addEventListener('change', updateRecipeVisibility);
 
@@ -396,10 +408,13 @@ async function saveProduct() {
     category_id: $('fCategory').value || null,
     selling_price: parseFloat($('fPrice').value) || 0,
     price_500g: $('fUnit').value.trim() === 'kg' && $('fPrice500').value !== '' ? parseFloat($('fPrice500').value) : null,
+    box_price: $('fUnit').value.trim() === 'pza' && Number($('fBoxPieces').value) > 0 ? parseFloat($('fBoxPrice').value) || 0 : null,
+    pieces_per_box: $('fUnit').value.trim() === 'pza' && Number($('fBoxPieces').value) > 0 ? Number($('fBoxPieces').value) : 0,
     stock: parseFloat($('fStock').value) || 0,
     min_stock: parseFloat($('fMinStock').value) || 0,
     unit: $('fUnit').value.trim() || 'pza',
     is_bote: $('fIsBote').checked ? 1 : 0,
+    hide_whatsapp: $('fHideWhatsapp').checked ? 1 : 0,
     container_product_id: $('fContainer').value ? Number($('fContainer').value) : null,
     recipe_grams: $('fRecipeGrams').value !== '' ? parseFloat($('fRecipeGrams').value) || 0 : 0,
     recipe_bote_id: $('fRecipeBote').value ? Number($('fRecipeBote').value) : null,

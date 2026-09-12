@@ -94,7 +94,7 @@ function receiptLines(sale, opts = {}, cols) {
     L.push({ text: padL(String(sale.payment_method || 'PAGO').toUpperCase(), pairW) + padR(fmtM(sale.total_amount), subW) });
   }
   L.push(sep);
-  L.push({ text: '* GRACIAS POR SU COMPRA *', align: 'center' });
+  L.push({ text: '* GRACIAS POR TU ALEGRE COMPRA *', align: 'center' });
   return L;
 }
 

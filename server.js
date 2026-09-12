@@ -131,11 +131,11 @@ app.post('/api/products/import', (req, res) => {
   const insCat = db.prepare('INSERT INTO categories (name, description) VALUES (?, ?)');
   const getProd = db.prepare('SELECT id FROM products WHERE barcode = ?');
   const insert = db.prepare(
-    `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, container_product_id, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, box_price, pieces_per_box, container_product_id, is_active, hide_whatsapp)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const update = db.prepare(
-    `UPDATE products SET name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, container_product_id = ?, is_active = ?
+    `UPDATE products SET name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, box_price = ?, pieces_per_box = ?, container_product_id = ?, is_active = ?, hide_whatsapp = ?
      WHERE id = ?`
   );
 
@@ -170,10 +170,12 @@ app.post('/api/products/import', (req, res) => {
         round3(Number(r.min_stock) || 0),
         String(r.unit || 'pza'),
         r.price_500g != null && r.price_500g !== '' ? round2(Number(r.price_500g)) : null,
+        Number(r.pieces_per_box) > 0 ? round2(Number(r.box_price) || 0) : null,
+        Number(r.pieces_per_box) > 0 ? Number(r.pieces_per_box) : 0,
         r.container_product_id != null && Number(r.container_product_id) ? Number(r.container_product_id) : null,
       ];
-      if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), existing.id); updated++; }
-      else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0)); inserted++; }
+      if (existing) { update.run(...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), r.hide_whatsapp ? 1 : 0, existing.id); updated++; }
+      else { insert.run(barcode, ...params, r.is_active === undefined ? 1 : (r.is_active ? 1 : 0), r.hide_whatsapp ? 1 : 0); inserted++; }
     }
     return { inserted, updated, skipped, categories: (data.categories || []).length };
   })({ products: rows, categories: body?.categories || [] });
@@ -206,8 +208,8 @@ app.post('/api/products', (req, res) => {
   if (!String(b.name || '').trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
   try {
     const info = db.prepare(
-      `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, container_product_id, is_active, is_bote, recipe_grams, recipe_bote_id, recipe_grams2, recipe_bote_id2)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO products (barcode, name, category_id, selling_price, stock, min_stock, unit, price_500g, box_price, pieces_per_box, container_product_id, is_active, is_bote, hide_whatsapp, recipe_grams, recipe_bote_id, recipe_grams2, recipe_bote_id2)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       String(b.barcode || '').trim() || `GEN-${Date.now()}`,
       String(b.name).trim(),
@@ -217,9 +219,12 @@ app.post('/api/products', (req, res) => {
       round3(Number(b.min_stock) || 0),
       String(b.unit || 'pza'),
       b.price_500g != null && b.price_500g !== '' ? round2(Number(b.price_500g)) : null,
+      Number(b.pieces_per_box) > 0 ? round2(Number(b.box_price) || 0) : null,
+      Number(b.pieces_per_box) > 0 ? Number(b.pieces_per_box) : 0,
       b.container_product_id ? Number(b.container_product_id) : null,
       b.is_active === undefined ? 1 : (b.is_active ? 1 : 0),
       b.is_bote ? 1 : 0,
+      b.hide_whatsapp ? 1 : 0,
       Number(b.recipe_grams) || 0,
       b.recipe_bote_id ? Number(b.recipe_bote_id) : null,
       Number(b.recipe_grams2) || 0,
@@ -238,7 +243,7 @@ app.put('/api/products/:id', (req, res) => {
   const b = req.body || {};
   try {
     db.prepare(
-      `UPDATE products SET barcode = ?, name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, container_product_id = ?, is_active = ?, is_bote = ?, recipe_grams = ?, recipe_bote_id = ?, recipe_grams2 = ?, recipe_bote_id2 = ?
+      `UPDATE products SET barcode = ?, name = ?, category_id = ?, selling_price = ?, stock = ?, min_stock = ?, unit = ?, price_500g = ?, box_price = ?, pieces_per_box = ?, container_product_id = ?, is_active = ?, is_bote = ?, hide_whatsapp = ?, recipe_grams = ?, recipe_bote_id = ?, recipe_grams2 = ?, recipe_bote_id2 = ?
        WHERE id = ?`
     ).run(
       String(b.barcode ?? p.barcode).trim(),
@@ -249,9 +254,12 @@ app.put('/api/products/:id', (req, res) => {
       round3(Number(b.min_stock ?? p.min_stock)),
       String(b.unit ?? p.unit),
       b.price_500g != null && b.price_500g !== '' ? round2(Number(b.price_500g)) : (p.price_500g != null ? p.price_500g : null),
+      b.box_price !== undefined && Number(b.pieces_per_box ?? 0) > 0 ? round2(Number(b.box_price) || 0) : (Number(p.pieces_per_box) > 0 ? (p.box_price || null) : null),
+      b.pieces_per_box !== undefined ? (Number(b.pieces_per_box) > 0 ? Number(b.pieces_per_box) : 0) : (p.pieces_per_box || 0),
       b.container_product_id !== undefined ? (b.container_product_id ? Number(b.container_product_id) : null) : (p.container_product_id || null),
       b.is_active === undefined ? p.is_active : (b.is_active ? 1 : 0),
       b.is_bote === undefined ? p.is_bote : (b.is_bote ? 1 : 0),
+      b.hide_whatsapp === undefined ? (p.hide_whatsapp || 0) : (b.hide_whatsapp ? 1 : 0),
       b.recipe_grams !== undefined ? (Number(b.recipe_grams) || 0) : (p.recipe_grams || 0),
       b.recipe_bote_id !== undefined ? (b.recipe_bote_id ? Number(b.recipe_bote_id) : null) : (p.recipe_bote_id || null),
       b.recipe_grams2 !== undefined ? (Number(b.recipe_grams2) || 0) : (p.recipe_grams2 || 0),

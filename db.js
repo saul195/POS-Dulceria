@@ -103,6 +103,18 @@ if (!productCols.includes('is_bote')) {
   db.exec('ALTER TABLE products ADD COLUMN is_bote INTEGER NOT NULL DEFAULT 0');
   console.log('[db] Columna is_bote agregada a products');
 }
+if (!productCols.includes('hide_whatsapp')) {
+  db.exec('ALTER TABLE products ADD COLUMN hide_whatsapp INTEGER NOT NULL DEFAULT 0');
+  console.log('[db] Columna hide_whatsapp agregada a products');
+}
+if (!productCols.includes('box_price')) {
+  db.exec('ALTER TABLE products ADD COLUMN box_price REAL');
+  console.log('[db] Columna box_price agregada a products');
+}
+if (!productCols.includes('pieces_per_box')) {
+  db.exec('ALTER TABLE products ADD COLUMN pieces_per_box REAL NOT NULL DEFAULT 0');
+  console.log('[db] Columna pieces_per_box agregada a products');
+}
 if (!productCols.includes('recipe_grams')) {
   db.exec('ALTER TABLE products ADD COLUMN recipe_grams REAL NOT NULL DEFAULT 0');
   console.log('[db] Columna recipe_grams agregada a products');

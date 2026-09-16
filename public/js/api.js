@@ -84,6 +84,11 @@ const api = {
     status: () => api.get('/api/cash/status'),
     open: (b) => api.post('/api/cash/open', b),
     close: (b) => api.post('/api/cash/close', b),
+    turns: (params) => {
+      const qs = new URLSearchParams();
+      Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v != null) qs.set(k, v); });
+      return api.get(`/api/cash/turns?${qs}`);
+    },
   },
   whatsapp: {
     login: (password) => api.post('/api/whatsapp/login', { password }),

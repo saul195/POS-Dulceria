@@ -19,6 +19,54 @@ let searchTerm = '';
 
 const $ = (id) => document.getElementById(id);
 
+/* ---------------- Puerta de caja ---------------- */
+
+let cashUnlocked = false;
+
+function gateOpen() {
+  const g = $('cashGate');
+  return !!g && !g.classList.contains('hidden');
+}
+
+async function checkCashGate() {
+  try {
+    const st = await api.cash.status();
+    if (st.open && st.session && String(st.session.cashier_name || '').trim()) { cashUnlocked = true; return; }
+  } catch (e) { /* se muestra la puerta */ }
+  showCashGate();
+}
+
+function showCashGate() {
+  const g = $('cashGate');
+  if (!g) return;
+  g.classList.remove('hidden');
+  setTimeout(() => $('gateName').focus(), 80);
+}
+
+async function openCashFromGate() {
+  const name = $('gateName').value.trim();
+  const amount = parseFloat($('gateAmount').value) || 0;
+  $('gateError').textContent = '';
+  if (!name) {
+    $('gateError').textContent = 'Registra tu nombre para abrir la caja.';
+    $('gateName').focus();
+    return;
+  }
+  try {
+    await api.cash.open({ opening_amount: amount, cashier_name: name });
+    cashUnlocked = true;
+    $('cashGate').classList.add('hidden');
+    toast(`Hola ${name}, caja abierta. ¡A vender!`, 'success');
+    $('barcodeInput').focus();
+  } catch (e) {
+    $('gateError').textContent = e.message;
+  }
+}
+
+$('gateOpenBtn').addEventListener('click', openCashFromGate);
+$('gateName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); openCashFromGate(); } });
+$('gateAmount').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); openCashFromGate(); } });
+
 /* ---------------- Catálogo ---------------- */
 
 async function loadCatalog() {
@@ -381,6 +429,7 @@ async function addByInput(value) {
 /* ---------------- Cobro ---------------- */
 
 async function charge() {
+  if (gateOpen()) { showCashGate(); setAlert('Abre la caja y registra tu nombre antes de cobrar.'); return; }
   const total = cartTotal();
   if (cart.size === 0) { setAlert('El carrito está vacío.'); return; }
   const payment = $('payMethod').value;
@@ -610,6 +659,7 @@ $('previewBtn').addEventListener('click', () => {
 
 /* Atajos de teclado */
 document.addEventListener('keydown', (e) => {
+  if (gateOpen()) return;
   if (e.key === 'F1') {
     e.preventDefault();
     $('helpModal').classList.add('show');
@@ -645,5 +695,5 @@ $('amountPaid').addEventListener('keydown', (e) => {
 window.addEventListener('load', () => {
   loadCatalog();
   initPrinterUI();
-  $('barcodeInput').focus();
+  checkCashGate();
 });

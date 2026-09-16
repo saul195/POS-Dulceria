@@ -76,6 +76,10 @@ function receiptLines(sale, opts = {}, cols) {
   L.push(sep);
   L.push({ text: padL('TICKET', pairW) + padR('#' + String(sale.ticket_no || sale.id).padStart(6, '0'), subW) });
   L.push({ text: padL('FECHA', pairW) + padR(dateStr, subW) });
+  if (sale.cashier_name) {
+    const name = String(sale.cashier_name);
+    L.push({ text: padL('ATENDIO', pairW) + padR(name.length > subW ? name.slice(0, subW) : name, subW) });
+  }
   L.push({ text: padL('ARTICULOS', pairW) + padR(String(sale.items.length), subW) });
   L.push(sep);
   L.push({ text: padR('CANT', qtyW) + ' '.repeat(gap) + padL('DESCRIPCION', nameW) + padR('COSTO', subW), mode: 0x08 });

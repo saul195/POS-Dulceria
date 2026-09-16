@@ -33,6 +33,16 @@ app.get('/logo.svg', (req, res) => {
 const round2 = (n) => Math.round(n * 100) / 100;
 const round3 = (n) => Math.round(n * 1000) / 1000;
 
+const turnSalesOf = (sess) => {
+  const closing = sess.closing_date || null;
+  const r = db.prepare(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS t FROM sales
+     WHERE cash_session_id = ?
+        OR (cash_session_id IS NULL AND created_at >= ? AND (? IS NULL OR created_at <= ?))`
+  ).get(sess.id, sess.opening_date, closing, closing);
+  return { count: Number(r.n) || 0, total: round2(Number(r.t) || 0) };
+};
+
 const todayStart = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 00:00:00`;
@@ -303,9 +313,10 @@ app.get('/api/sales', (req, res) => {
   const pageNum = Math.max(1, Number(page) || 1);
   const size = Math.min(200, Math.max(1, Number(pageSize) || 20));
   const rows = db.prepare(
-    `SELECT s.*,
+    `SELECT s.*, cs.cashier_name,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS items_count
-     FROM sales s ${whereSql} ORDER BY s.id DESC LIMIT ? OFFSET ?`
+     FROM sales s LEFT JOIN cash_sessions cs ON cs.id = s.cash_session_id
+     ${whereSql} ORDER BY s.id DESC LIMIT ? OFFSET ?`
   ).all(...params, size, (pageNum - 1) * size);
   res.json({ sales: rows, total: count, page: pageNum, pageSize: size });
 });
@@ -318,7 +329,10 @@ app.get('/api/sales/:id', (req, res) => {
      FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
      WHERE si.sale_id = ? ORDER BY si.id`
   ).all(sale.id);
-  res.json({ ...sale, items });
+  const cashier = sale.cash_session_id
+    ? db.prepare('SELECT cashier_name FROM cash_sessions WHERE id = ?').get(sale.cash_session_id)
+    : null;
+  res.json({ ...sale, cashier_name: cashier ? cashier.cashier_name : '', items });
 });
 
 const SECRET_KEY = 'villalegre195';
@@ -487,10 +501,14 @@ app.post('/api/sales', (req, res) => {
     }
   }
 
+    const session = db.prepare(`SELECT id, cashier_name FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
+  if (!session) {
+    return res.status(409).json({ error: 'Debes abrir la caja y registrar tu nombre antes de vender' });
+  }
+
     const createSale = db.transaction(() => {
       const getProd = db.prepare('SELECT * FROM products WHERE id = ?');
       const decStock = db.prepare('UPDATE products SET stock = round(stock - ?, 3) WHERE id = ?');
-      const session = db.prepare(`SELECT id FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
       const nextTicket = db.prepare(
         `SELECT COALESCE(MAX(ticket_no), 0) + 1 AS n FROM sales WHERE date(created_at) = date('now', 'localtime')`
       ).get().n;
@@ -586,7 +604,7 @@ app.post('/api/sales', (req, res) => {
     return res.status(409).json({ error: e.message });
   }
   const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(result.saleId);
-  res.status(201).json({ ...sale, items: result.items });
+  res.status(201).json({ ...sale, cashier_name: session.cashier_name || '', items: result.items });
 });
 
 /* ============================ REPORTES ============================ */
@@ -716,8 +734,9 @@ app.get('/api/reports/today', (req, res) => {
   ).all();
 
   const session = db.prepare(`SELECT * FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
+  const turnSales = session ? turnSalesOf(session).total : 0;
   const openSession = session
-    ? { ...session, today_sales: round2(summary.total_sales), expected: round2((session.opening_amount || 0) + round2(summary.total_sales)) }
+    ? { ...session, today_sales: round2(summary.total_sales), turn_sales: turnSales, expected: round2((session.opening_amount || 0) + turnSales) }
     : null;
 
   res.json({
@@ -738,17 +757,24 @@ app.get('/api/reports/today', (req, res) => {
 app.get('/api/cash/status', (req, res) => {
   const session = db.prepare(`SELECT * FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
   const todaySales = db.prepare('SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE created_at >= ?').get(todayStart()).total;
+  const turnSales = session ? turnSalesOf(session).total : 0;
   res.json({
     open: !!session,
-    session: session ? { ...session, today_sales: round2(todaySales), expected: round2((session.opening_amount || 0) + todaySales) } : null,
+    session: session ? { ...session, today_sales: round2(todaySales), turn_sales: turnSales, expected: round2((session.opening_amount || 0) + turnSales) } : null,
   });
 });
 
 app.post('/api/cash/open', (req, res) => {
-  const open = db.prepare(`SELECT id FROM cash_sessions WHERE status = 'abierta' LIMIT 1`).get();
-  if (open) return res.status(409).json({ error: 'Ya existe una caja abierta' });
-  const { opening_amount = 0, notes = '' } = req.body || {};
-  const info = db.prepare('INSERT INTO cash_sessions (opening_amount, notes) VALUES (?, ?)').run(Number(opening_amount) || 0, String(notes));
+  const { opening_amount = 0, cashier_name = '', notes = '' } = req.body || {};
+  const name = String(cashier_name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Registra tu nombre para abrir la caja' });
+  const open = db.prepare(`SELECT id, cashier_name FROM cash_sessions WHERE status = 'abierta' LIMIT 1`).get();
+  if (open) {
+    if (String(open.cashier_name || '').trim()) return res.status(409).json({ error: 'Ya existe una caja abierta' });
+    db.prepare('UPDATE cash_sessions SET cashier_name = ?, opening_amount = ?, notes = ? WHERE id = ?').run(name, Number(opening_amount) || 0, String(notes), open.id);
+    return res.json(db.prepare('SELECT * FROM cash_sessions WHERE id = ?').get(open.id));
+  }
+  const info = db.prepare('INSERT INTO cash_sessions (opening_amount, notes, cashier_name) VALUES (?, ?, ?)').run(Number(opening_amount) || 0, String(notes), name);
   res.status(201).json(db.prepare('SELECT * FROM cash_sessions WHERE id = ?').get(info.lastInsertRowid));
 });
 
@@ -756,14 +782,39 @@ app.post('/api/cash/close', (req, res) => {
   const session = db.prepare(`SELECT * FROM cash_sessions WHERE status = 'abierta' ORDER BY id DESC LIMIT 1`).get();
   if (!session) return res.status(409).json({ error: 'No hay caja abierta' });
   const { closing_amount = 0, notes = '' } = req.body || {};
-  const todaySales = db.prepare('SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE created_at >= ?').get(todayStart()).total;
-  const expected = round2((session.opening_amount || 0) + todaySales);
+  const turnSales = turnSalesOf(session).total;
+  const expected = round2((session.opening_amount || 0) + turnSales);
   const closing = round2(Number(closing_amount) || 0);
   const difference = round2(closing - expected);
   db.prepare(
-    `UPDATE cash_sessions SET closing_date = datetime('now','localtime'), closing_amount = ?, expected_amount = ?, difference = ?, status = 'cerrada', notes = ? WHERE id = ?`
-  ).run(closing, expected, difference, notes || session.notes, session.id);
+    `UPDATE cash_sessions SET closing_date = datetime('now','localtime'), closing_amount = ?, expected_amount = ?, difference = ?, status = 'cerrada', sales_amount = ?, notes = ? WHERE id = ?`
+  ).run(closing, expected, difference, turnSales, notes || session.notes, session.id);
   res.json(db.prepare('SELECT * FROM cash_sessions WHERE id = ?').get(session.id));
+});
+
+app.get('/api/cash/turns', (req, res) => {
+  const { start_date, end_date } = req.query;
+  let where = '';
+  const params = [];
+  if (start_date && String(start_date).trim()) { where += 'WHERE date(opening_date) >= ? '; params.push(String(start_date).slice(0, 10)); }
+  if (end_date && String(end_date).trim()) { where += (where ? 'AND ' : 'WHERE ') + 'date(opening_date) <= ? '; params.push(String(end_date).slice(0, 10)); }
+  const rows = db.prepare(`SELECT * FROM cash_sessions ${where}ORDER BY opening_date DESC, id DESC`).all(...params);
+  const turns = rows.map((t) => {
+    const { count, total } = turnSalesOf(t);
+    const sales_total = t.sales_amount != null ? round2(Number(t.sales_amount)) : total;
+    const expected = round2((t.opening_amount || 0) + sales_total);
+    return { ...t, turn_count: count, sales_total, expected };
+  });
+  const totals = turns.reduce((acc, t) => {
+    acc.sales_count += t.turn_count;
+    acc.sales_total = round2(acc.sales_total + t.sales_total);
+    acc.opening = round2(acc.opening + (Number(t.opening_amount) || 0));
+    acc.expected = round2(acc.expected + t.expected);
+    if (t.closing_amount != null) acc.closing = round2(acc.closing + Number(t.closing_amount));
+    if (t.difference != null) acc.difference = round2(acc.difference + Number(t.difference));
+    return acc;
+  }, { turns: turns.length, sales_count: 0, sales_total: 0, opening: 0, expected: 0, closing: 0, difference: 0 });
+  res.json({ turns, totals });
 });
 
 /* ============================ WHATSAPP ============================ */

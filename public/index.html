@@ -103,6 +103,24 @@
     </div>
   </div>
 
+  <div id="cashGate" class="cash-gate hidden">
+    <div class="cash-gate-card">
+      <div class="cash-gate-logo">☕</div>
+      <h2>Hola, bienvenido a Villa Alegre</h2>
+      <p class="muted mt">Para vender primero abre la caja y registra tu nombre. Sin esto no se puede usar el sistema.</p>
+      <div class="form-field mb mt">
+        <label for="gateName">Tu nombre</label>
+        <input type="text" id="gateName" autocomplete="off" placeholder="Nombre del encargado de la caja">
+      </div>
+      <div class="form-field mb">
+        <label for="gateAmount">Fondo inicial de caja ($)</label>
+        <input type="number" id="gateAmount" step="0.01" min="0" value="0">
+      </div>
+      <div class="gate-error" id="gateError"></div>
+      <button class="btn btn-success btn-lg btn-block" id="gateOpenBtn">Abrir caja y empezar a vender</button>
+    </div>
+  </div>
+
   <div id="helpModal" class="modal-backdrop">
     <div class="modal">
       <h3>Atajos de teclado</h3>

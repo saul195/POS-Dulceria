@@ -143,6 +143,16 @@ if (!saleItemCols.includes('sale_price')) {
   console.log('[db] Columna sale_price agregada a sale_items');
 }
 
+const csCols = db.prepare('PRAGMA table_info(cash_sessions)').all().map((c) => c.name);
+if (!csCols.includes('cashier_name')) {
+  db.exec("ALTER TABLE cash_sessions ADD COLUMN cashier_name TEXT DEFAULT ''");
+  console.log('[db] Columna cashier_name agregada a cash_sessions');
+}
+if (!csCols.includes('sales_amount')) {
+  db.exec('ALTER TABLE cash_sessions ADD COLUMN sales_amount REAL');
+  console.log('[db] Columna sales_amount agregada a cash_sessions');
+}
+
 const saleCols = db.prepare('PRAGMA table_info(sales)').all().map((c) => c.name);
 if (!saleCols.includes('ticket_no')) {
   db.exec('ALTER TABLE sales ADD COLUMN ticket_no INTEGER');

@@ -206,6 +206,17 @@ tbody tr:hover { background: #fbf6f0; }
 td.num, th.num { text-align: right; }
 .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
 
+/* ---------- Turnos de caja ---------- */
+tr.turn-open td { background: #fffaf0; }
+tr.turn-open td:first-child { font-weight: 700; }
+tr.turns-total td {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border-top: 2px solid var(--primary);
+  font-size: 14px;
+}
+tfoot tr.turns-total td { border-bottom: none; }
+
 /* ---------- Badges & alerts ---------- */
 .badge {
   display: inline-block;
@@ -373,6 +384,55 @@ td.num, th.num { text-align: right; }
 .barcode-preview svg { max-width: 100%; height: auto; }
 .barcode-preview + .btn { margin-top: 8px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ---------- Puerta de apertura de caja ---------- */
+.cash-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: linear-gradient(135deg, var(--bg), #f0e4d5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.cash-gate.hidden { display: none; }
+.cash-gate-card {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  padding: 30px 28px;
+  box-shadow: 0 24px 70px rgba(93, 58, 30, .25);
+  text-align: center;
+}
+.cash-gate-logo {
+  font-size: 42px;
+  margin-bottom: 6px;
+}
+.cash-gate-card h2 {
+  color: var(--primary-dark);
+  margin-bottom: 6px;
+  font-size: 21px;
+}
+.cash-gate-card .form-field { text-align: left; }
+.cash-gate-card input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+}
+.cash-gate-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(138, 90, 52, .15); }
+.gate-error {
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 18px;
+  margin-bottom: 6px;
+}
 
 /* ---------- Ayuda (F1) ---------- */
 .help-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }

@@ -241,17 +241,19 @@ function renderCart() {
 function cartTotal() {
   let total = 0;
   for (const entry of cart.values()) total += entrySubtotal(entry);
-  return Math.round(total * 100) / 100;
+  return roundHalf(total);
 }
 
+const roundHalf = (n) => Math.round(n * 2) / 2;
+
 function entrySubtotal(entry) {
-  if (entry.pesos != null) return Math.round(entry.pesos * 100) / 100;
+  if (entry.pesos != null) return roundHalf(entry.pesos);
   if (entry.boxes != null) {
     const b = boxInfo(entry.product);
-    if (b) return Math.round(b.price * entry.boxes * 100) / 100;
+    if (b) return roundHalf(b.price * entry.boxes);
   }
   const raw = entry.fixedPrice != null ? entry.fixedPrice : entryPrice(entry) * entry.quantity;
-  return Math.round(raw);
+  return roundHalf(raw);
 }
 
 function updateChange() {
@@ -608,10 +610,10 @@ $('cartList').addEventListener('input', (e) => {
   const id = Number(pesosInput.dataset.id);
   const entry = cart.get(id);
   if (!entry || entry.product.unit !== 'kg') return;
-  const amt = parseFloat(pesosInput.value) || 0;
+  const amt = Math.round((parseFloat(pesosInput.value) || 0) * 2) / 2;
   if (amt <= 0) return;
   entry.quantity = qtyForPesos(entry.product, amt, 0);
-  entry.pesos = Math.round(amt * 100) / 100;
+  entry.pesos = amt;
   entry.fixedPrice = undefined;
   const gramsEl = pesosInput.closest('.ci-controls').querySelector('.cart-qty');
   if (gramsEl) gramsEl.value = Math.round(entry.quantity * 1000);

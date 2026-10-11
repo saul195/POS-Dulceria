@@ -71,9 +71,27 @@ const api = {
       if (opts.end_date) qs.set('end_date', opts.end_date);
       return api.get(`/api/reports/product-sales?${qs}`);
     },
+    surtidos: (productId, opts = {}) => {
+      const qs = new URLSearchParams({ product_id: productId });
+      if (opts.end_date) qs.set('end_date', opts.end_date);
+      return api.get(`/api/reports/surtidos?${qs}`);
+    },
+    salesDay: (date) => api.get(`/api/reports/sales-day?${new URLSearchParams({ date })}`),
+    salesDays: (start, end) => {
+      const qs = new URLSearchParams();
+      if (start) qs.set('start', start);
+      if (end) qs.set('end', end);
+      return api.get(`/api/reports/sales-days?${qs}`);
+    },
   },
   stock: {
     entry: (b) => api.post('/api/stock/entry', b),
+    movementDays: (start, end) => {
+      const qs = new URLSearchParams();
+      if (start) qs.set('start', start);
+      if (end) qs.set('end', end);
+      return api.get(`/api/stock/movement-days?${qs}`);
+    },
     movements: (params) => {
       const qs = new URLSearchParams();
       Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v != null) qs.set(k, v); });

@@ -388,6 +388,29 @@ app.post('/api/stock/entry', (req, res) => {
   res.status(201).json({ ok: true, stock: updated.stock, movement_id: addStock });
 });
 
+/* Días con movimientos de stock, para marcar el calendario. */
+app.get('/api/stock/movement-days', (req, res) => {
+  const where = [];
+  const params = [];
+  if (req.query.start) { where.push('date(created_at) >= ?'); params.push(String(req.query.start).slice(0, 10)); }
+  if (req.query.end) { where.push('date(created_at) <= ?'); params.push(String(req.query.end).slice(0, 10)); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db.prepare(
+    `SELECT date(created_at) AS day, COUNT(*) AS movimientos,
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN quantity ELSE 0 END), 0) AS entradas,
+            COALESCE(SUM(CASE WHEN type = 'salida'  THEN quantity ELSE 0 END), 0) AS salidas
+     FROM stock_movements ${whereSql} GROUP BY day ORDER BY day ASC`
+  ).all(...params);
+  res.json({
+    days: rows.map((r) => ({
+      day: r.day,
+      movimientos: Number(r.movimientos) || 0,
+      entradas: round3(Number(r.entradas) || 0),
+      salidas: round3(Number(r.salidas) || 0),
+    })),
+  });
+});
+
 app.get('/api/stock/movements', (req, res) => {
   const { date, product_id, category_id, search = '', page = 1, pageSize = 50 } = req.query;
   const where = [];
@@ -422,7 +445,42 @@ app.get('/api/stock/movements', (req, res) => {
             COALESCE(SUM(CASE WHEN type = 'salida' THEN quantity ELSE 0 END), 0) AS salidas
      FROM stock_movements m JOIN products p ON p.id = m.product_id ${whereSql}`
   ).get(...params);
-  res.json({ movements: rows, total, page: pageNum, pageSize: size, summary });
+
+  /* Productos que sí movieron stock en el período (ignora el filtro de producto
+     para que las tarjetas sirvan también para cambiar de producto). */
+  const prodWhere = [];
+  const prodParams = [];
+  if (date) { prodWhere.push('date(m.created_at) = ?'); prodParams.push(String(date).slice(0, 10)); }
+  if (category_id) { prodWhere.push('p.category_id = ?'); prodParams.push(Number(category_id)); }
+  if (search) {
+    prodWhere.push('(p.name LIKE ? OR p.barcode LIKE ?)');
+    prodParams.push(`%${search}%`, `%${search}%`);
+  }
+  const prodWhereSql = prodWhere.length ? `WHERE ${prodWhere.join(' AND ')}` : '';
+  const moved = db.prepare(
+    `SELECT p.id, p.name, p.barcode, p.unit, p.stock, p.is_bote,
+            COUNT(*) AS movimientos,
+            COALESCE(SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END), 0) AS entradas,
+            COALESCE(SUM(CASE WHEN m.type = 'salida'  THEN m.quantity ELSE 0 END), 0) AS salidas
+     FROM stock_movements m JOIN products p ON p.id = m.product_id
+     ${prodWhereSql}
+     GROUP BY p.id
+     ORDER BY (entradas + salidas) DESC, p.name ASC`
+  ).all(...prodParams);
+
+  res.json({
+    movements: rows,
+    total,
+    page: pageNum,
+    pageSize: size,
+    summary,
+    products: moved.map((p) => ({
+      ...p,
+      movimientos: Number(p.movimientos) || 0,
+      entradas: round3(Number(p.entradas) || 0),
+      salidas: round3(Number(p.salidas) || 0),
+    })),
+  });
 });
 
 app.get('/api/reports/product-sales', (req, res) => {
@@ -449,11 +507,139 @@ app.get('/api/reports/product-sales', (req, res) => {
      FROM sale_items si JOIN sales s ON s.id = si.sale_id
      WHERE 1 = 1 ${prodCond}${dateCond}`
   ).get(...args);
+  const entDateCond = isAll ? '' : ' AND date(m.created_at) BETWEEN ? AND ? ';
+  const entArgs = [];
+  if (pid) entArgs.push(pid);
+  if (!isAll) entArgs.push(sd, ed);
+  const entradas = db.prepare(
+    `SELECT date(m.created_at) AS day, COALESCE(SUM(m.quantity), 0) AS qty, COUNT(*) AS count
+     FROM stock_movements m${pid ? ' JOIN products p ON p.id = m.product_id' : ''}
+     WHERE m.type = 'entrada'${pid ? ' AND p.id = ? ' : ''}${entDateCond}
+     GROUP BY date(m.created_at) ORDER BY day`
+  ).all(...entArgs);
+  const dayEnt = {};
+  for (const en of entradas) dayEnt[en.day] = { quantity: round3(en.qty), count: en.count };
+  const days = rows.map((r) => ({ ...r, qty: round3(r.qty), total: round2(r.total), entrada: dayEnt[r.day] || null }));
   res.json({
     product: p ? { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, selling_price: p.selling_price, stock: p.stock } : null,
     start_date: sd, end_date: ed, all: !!isAll,
-    days: rows,
-    summary: { qty: round3(summary.total_qty), revenue: round2(summary.total_revenue), tickets: summary.total_tickets },
+    days,
+    summary: {
+      qty: round3(summary.total_qty),
+      revenue: round2(summary.total_revenue),
+      tickets: summary.total_tickets,
+      entrada_days: pid ? entradas.length : 0,
+      entradas_qty: pid ? round3(entradas.reduce((s, e) => s + Number(e.qty), 0)) : 0,
+    },
+  });
+});
+
+/* Ventas de un día, con el desglose de artículos de cada ticket. */
+app.get('/api/reports/sales-day', (req, res) => {
+  const day = req.query.date ? String(req.query.date).slice(0, 10) : todayStr();
+  const sales = db.prepare(
+    `SELECT id, ticket_no, created_at, payment_method, total_amount
+     FROM sales WHERE date(created_at) = ? ORDER BY id ASC`
+  ).all(day);
+  const getItems = db.prepare(
+    `SELECT si.quantity, si.subtotal, si.product_name, p.name AS current_name, p.unit
+     FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
+     WHERE si.sale_id = ? ORDER BY si.id`
+  );
+  let articles = 0;
+  let total = 0;
+  const list = sales.map((s) => {
+    const items = getItems.all(s.id).map((it) => ({
+      name: it.product_name || it.current_name || 'Producto',
+      unit: it.unit || '',
+      qty: round3(Number(it.quantity) || 0),
+      subtotal: round2(Number(it.subtotal) || 0),
+    }));
+    const qty = items.reduce((a, b) => a + b.qty, 0);
+    articles += qty;
+    total += Number(s.total_amount) || 0;
+    return {
+      id: s.id,
+      ticket_no: s.ticket_no,
+      time: String(s.created_at).slice(11, 16),
+      payment_method: s.payment_method,
+      total_amount: round2(Number(s.total_amount) || 0),
+      articles: round3(qty),
+      items,
+    };
+  });
+  res.json({
+    date: day,
+    sales: list,
+    summary: { tickets: list.length, articles: round3(articles), total: round2(total) },
+  });
+});
+
+/* Días con ventas, para marcar el calendario. */
+app.get('/api/reports/sales-days', (req, res) => {
+  const where = [];
+  const params = [];
+  if (req.query.start) { where.push('date(created_at) >= ?'); params.push(String(req.query.start).slice(0, 10)); }
+  if (req.query.end) { where.push('date(created_at) <= ?'); params.push(String(req.query.end).slice(0, 10)); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db.prepare(
+    `SELECT date(created_at) AS day, COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
+     FROM sales ${whereSql} GROUP BY day ORDER BY day ASC`
+  ).all(...params);
+  res.json({
+    days: rows.map((r) => ({ day: r.day, count: Number(r.count) || 0, total: round2(Number(r.total) || 0) })),
+  });
+});
+
+app.get('/api/reports/surtidos', (req, res) => {
+  const product_id = Number(req.query.product_id);
+  if (!product_id) return res.status(400).json({ error: 'Falta el producto' });
+  const p = db.prepare('SELECT * FROM products WHERE id = ?').get(product_id);
+  if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
+  const endDate = req.query.end_date ? String(req.query.end_date).slice(0, 10) : null;
+  const lastBound = endDate ? `${endDate} 23:59:59` : `${todayStr()} 23:59:59`;
+
+  const entradas = db.prepare(
+    `SELECT id, created_at, quantity, reason FROM stock_movements
+     WHERE product_id = ? AND type = 'entrada' AND created_at <= ?
+     ORDER BY created_at ASC, id ASC`
+  ).all(product_id, lastBound);
+
+  const soldAfter = db.prepare(
+    `SELECT COALESCE(SUM(si.quantity), 0) AS qty, COALESCE(SUM(si.subtotal), 0) AS revenue, COUNT(DISTINCT s.id) AS tickets
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id
+     WHERE si.product_id = ? AND s.created_at >= ? AND s.created_at <= ?`
+  );
+  const soldPeriod = db.prepare(
+    `SELECT COALESCE(SUM(si.quantity), 0) AS qty, COALESCE(SUM(si.subtotal), 0) AS revenue, COUNT(DISTINCT s.id) AS tickets
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id
+     WHERE si.product_id = ? AND s.created_at >= ? AND s.created_at < ?`
+  );
+
+  const list = [];
+  for (let i = 0; i < entradas.length; i++) {
+    const e = entradas[i];
+    const next = entradas[i + 1] || null;
+    const after = soldAfter.get(product_id, e.created_at, lastBound);
+    const periodEnd = next ? next.created_at : `${lastBound.slice(0, 10)} 23:59:59`;
+    const pr = soldPeriod.get(product_id, e.created_at, periodEnd);
+    list.push({
+      id: e.id,
+      at: e.created_at,
+      day: String(e.created_at).slice(0, 10),
+      time: String(e.created_at).slice(11, 16),
+      quantity: round3(e.quantity),
+      reason: e.reason,
+      after: { sold_qty: round3(after.qty), revenue: round2(after.revenue), tickets: after.tickets },
+      period: { sold_qty: round3(pr.qty), revenue: round2(pr.revenue), tickets: pr.tickets, remanente: round3(e.quantity - pr.qty) },
+    });
+  }
+  list.reverse();
+
+  res.json({
+    product: { id: p.id, name: p.name, barcode: p.barcode, unit: p.unit, stock: p.stock, selling_price: p.selling_price },
+    end_date: endDate || todayStr(),
+    surtidos: list,
   });
 });
 

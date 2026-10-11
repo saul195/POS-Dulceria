@@ -108,8 +108,6 @@ async function loadReports() {
             <span class="badge badge-low">${stockNum(p.stock, p.unit)} / min ${stockNum(p.min_stock, p.unit)} ${p.unit}</span>
           </div>`).join('')
       : '<div>Sin productos con stock bajo 👍</div>';
-
-    renderCash(r.open_session);
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -151,166 +149,6 @@ async function loadSales() {
       mk(`Pág ${salesPage}/${totalPages}`, salesPage, true, true);
       mk('Sig ›', salesPage + 1, salesPage === totalPages);
     }
-  } catch (e) {
-    toast(e.message, 'error');
-  }
-}
-
-/* ---------------- Caja ---------------- */
-
-function renderCash(session) {
-  const box = $('cashBox');
-  if (session) {
-    box.innerHTML = `
-      <div class="row" style="justify-content:space-between;">
-        <div>
-          <span class="badge badge-ok">CAJA ABIERTA</span>
-          <div class="muted" style="margin-top:6px;">
-            Cajero: <b>${escHtml(session.cashier_name || '')}</b><br>
-            Fondo inicial: <b>${moneyMX(session.opening_amount)}</b><br>
-            Apertura: ${session.opening_date}<br>
-            Ingresos del turno: <b>${moneyMX(session.turn_sales ?? session.today_sales ?? 0)}</b><br>
-            Ventas de hoy en caja: <b>${moneyMX(session.today_sales ?? 0)}</b><br>
-            Esperado en caja: <b>${moneyMX(session.expected ?? 0)}</b>
-          </div>
-        </div>
-        <button class="btn btn-danger" id="closeCashBtn">Cerrar caja / corte</button>
-      </div>`;
-    $('closeCashBtn').addEventListener('click', () => {
-      const modal = openModal(`
-        <h3>Cerrar caja (corte de turno)</h3>
-        <p class="muted mb">Fondo inicial: ${moneyMX(session.opening_amount)} · Ventas de hoy: ${moneyMX(session.today_sales ?? 0)}<br>
-        Cantidad esperada: <b>${moneyMX(session.expected ?? 0)}</b></p>
-        <div class="form-field mb">
-          <label>Cantidad contada en caja ($)</label>
-          <input type="number" id="closingAmount" step="0.01" min="0" value="${session.expected ?? 0}">
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="cxlClose">Cancelar</button>
-          <button class="btn btn-danger" id="doClose">Cerrar caja</button>
-        </div>`, 'closeCashModal');
-      modal.querySelector('#cxlClose').addEventListener('click', () => closeModal(modal.closest('.modal-backdrop')));
-      modal.querySelector('#doClose').addEventListener('click', async () => {
-        try {
-          const r = await api.cash.close({ closing_amount: parseFloat(modal.querySelector('#closingAmount').value) || 0 });
-          closeModal(modal.closest('.modal-backdrop'));
-          const diff = r.difference;
-          toast(`Caja cerrada. ${diff >= 0 ? 'Sobrante' : 'Faltante'}: ${moneyMX(Math.abs(diff))}`, diff >= 0 ? 'success' : 'error');
-          loadReports();
-          loadTurns();
-        } catch (e) { toast(e.message, 'error'); }
-      });
-    });
-  } else {
-    box.innerHTML = `
-      <div class="row" style="justify-content:space-between;">
-        <div>
-          <span class="badge badge-warn">CAJA CERRADA</span>
-          <div class="muted" style="margin-top:6px;">Abre caja con tu fondo inicial para registrar el turno.</div>
-        </div>
-        <button class="btn btn-success" id="openCashBtn">Abrir caja</button>
-      </div>`;
-    $('openCashBtn').addEventListener('click', () => {
-      const modal = openModal(`
-        <h3>Abrir caja</h3>
-        <div class="form-field mb">
-          <label>Tu nombre</label>
-          <input type="text" id="openingName" autocomplete="off" placeholder="Nombre del encargado">
-        </div>
-        <div class="form-field mb">
-          <label>Fondo inicial de caja ($)</label>
-          <input type="number" id="openingAmount" step="0.01" min="0" value="0">
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="cxlOpen">Cancelar</button>
-          <button class="btn btn-success" id="doOpen">Abrir</button>
-        </div>`, 'openCashModal');
-      modal.querySelector('#cxlOpen').addEventListener('click', () => closeModal(modal.closest('.modal-backdrop')));
-      modal.querySelector('#doOpen').addEventListener('click', async () => {
-        const name = modal.querySelector('#openingName').value.trim();
-        if (!name) return toast('Registra tu nombre para abrir la caja', 'error');
-        try {
-          await api.cash.open({ opening_amount: parseFloat(modal.querySelector('#openingAmount').value) || 0, cashier_name: name });
-          closeModal(modal.closest('.modal-backdrop'));
-          toast('Caja abierta.');
-          loadReports();
-          loadTurns();
-        } catch (e) { toast(e.message, 'error'); }
-      });
-    });
-  }
-}
-
-/* ---------------- Turnos ---------------- */
-
-function fmtDT(v) {
-  return v ? String(v).slice(0, 16) : '—';
-}
-
-function turnsGetDates() {
-  const period = $('turnsPeriod').value;
-  const now = new Date();
-  let sd, ed;
-  if (period === 'day') {
-    sd = ed = today;
-  } else if (period === 'week') {
-    const day = now.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    const mon = new Date(now);
-    mon.setDate(now.getDate() - diff);
-    sd = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
-    ed = today;
-  } else if (period === 'month') {
-    sd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    ed = today;
-  } else if (period === 'all') {
-    return {};
-  } else {
-    sd = $('turnsFrom').value || today;
-    ed = $('turnsTo').value || today;
-  }
-  if (sd > ed) [sd, ed] = [ed, sd];
-  return { start_date: sd, end_date: ed };
-}
-
-async function loadTurns() {
-  try {
-    const r = await api.cash.turns(turnsGetDates());
-    const empty = $('turnsEmpty');
-    const body = $('turnsBody');
-    const foot = $('turnsFoot');
-    const turns = r.turns || [];
-    empty.classList.toggle('hidden', turns.length > 0);
-    body.innerHTML = turns.map((t) => {
-      const open = t.status === 'abierta';
-      const diff = t.difference != null ? Number(t.difference) : null;
-      const diffTxt = diff == null ? '—' : `${diff >= 0 ? '+' : ''}${moneyMX(Math.abs(diff))}`;
-      const diffClass = diff == null ? '' : (diff === 0 ? 'ok' : (diff > 0 ? 'ok' : 'err'));
-      return `
-        <tr class="${open ? 'turn-open' : ''}">
-          <td>${open ? '<span class="badge badge-ok">●</span>' : ''}${t.id}</td>
-          <td><b>${escHtml(t.cashier_name || '—')}</b></td>
-          <td>${fmtDT(t.opening_date)}</td>
-          <td>${open ? '<span class="badge badge-ok">Abierta</span>' : fmtDT(t.closing_date)}</td>
-          <td class="num">${t.turn_count || 0}</td>
-          <td class="num"><b>${moneyMX(t.sales_total || 0)}</b></td>
-          <td class="num">${moneyMX(t.opening_amount || 0)}</td>
-          <td class="num">${moneyMX(t.expected ?? 0)}</td>
-          <td class="num">${t.closing_amount != null ? moneyMX(t.closing_amount) : '—'}</td>
-          <td class="num ${diffClass}">${diffTxt}</td>
-        </tr>`;
-    }).join('');
-    const tt = r.totals;
-    foot.innerHTML = `
-      <tr class="turns-total">
-        <td colspan="4"><b>Total · ${tt.turns} turno${tt.turns === 1 ? '' : 's'}</b></td>
-        <td class="num"><b>${tt.sales_count}</b></td>
-        <td class="num"><b>${moneyMX(tt.sales_total)}</b></td>
-        <td class="num"><b>${moneyMX(tt.opening)}</b></td>
-        <td class="num"><b>${moneyMX(tt.expected)}</b></td>
-        <td class="num"><b>${tt.closing ? moneyMX(tt.closing) : '—'}</b></td>
-        <td class="num"><b>${tt.difference ? moneyMX(tt.difference) : '—'}</b></td>
-      </tr>`;
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -410,7 +248,6 @@ initChartControls();
 loadReports();
 loadSales();
 loadChart();
-loadTurns();
 setInterval(loadReports, 60000);
 if (typeof printer !== 'undefined' && printer.loadConfig) printer.loadConfig().catch(() => {});
 
@@ -434,8 +271,6 @@ function initCardToggle(toggleId, bodyId, storageKey) {
 
 initCardToggle('periodToggle', 'periodBody', 'pos_period_card');
 initCardToggle('salesToggle', 'salesContent', 'pos_sales_card');
-initCardToggle('cashToggle', 'cashContent', 'pos_cash_card');
-initCardToggle('turnsToggle', 'turnsContent', 'pos_turns_card');
 initCardToggle('prodSalesToggle', 'prodSalesContent', 'pos_prod_sales_card');
 
 document.querySelectorAll('.seg-btn').forEach((btn) => {
@@ -457,139 +292,72 @@ if (chartGo) {
   });
 }
 
-/* ---------------- Ventas por producto ---------------- */
+/* ---------------- Ventas del día ---------------- */
 
-let psSelectedProduct = null;
-let psAllProducts = [];
+let psDay = today;
 
-function psGetDates() {
-  const period = $('psPeriod').value;
-  const now = new Date();
-  let sd, ed;
-  if (period === 'day') {
-    sd = ed = today;
-  } else if (period === 'week') {
-    const day = now.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    const mon = new Date(now);
-    mon.setDate(now.getDate() - diff);
-    sd = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
-    ed = today;
-  } else if (period === 'month') {
-    sd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    ed = today;
-  } else if (period === 'year') {
-    sd = `${now.getFullYear()}-01-01`;
-    ed = today;
-  } else if (period === 'all') {
-    return { all: true };
-  } else {
-    sd = $('psFrom').value || today;
-    ed = $('psTo').value || today;
-  }
-  return { start_date: sd, end_date: ed };
+const psCalendar = createDateCalendar({
+  mount: $('psCalendar'),
+  value: today,
+  onChange: (day) => {
+    psDay = day;
+    loadDaySales();
+  },
+  onMonthChange: () => { psCalendar.refreshMarks(); },
+  legend: '<i class="sale"></i> ventas',
+  loadMarks: async (start, end) => {
+    const r = await api.reports.salesDays(start, end);
+    return (r.days || []).map((d) => ({
+      day: d.day,
+      dots: ['sale'],
+      title: `${d.count} venta${d.count === 1 ? '' : 's'} · ${moneyMX(d.total)}`,
+    }));
+  },
+});
+
+if ($('psGo')) {
+  $('psGo').addEventListener('click', () => {
+    psDay = psCalendar.getValue();
+    loadDaySales();
+  });
 }
 
-async function psSearchProducts(query) {
-  if (!query || query.length < 2) { psAllProducts = []; return; }
+function fmtArticles(items) {
+  if (!items || !items.length) return '<span class="muted">—</span>';
+  return items.map((it) => {
+    const q = it.unit === 'kg' ? num(it.qty, 3) : num(it.qty, 2);
+    const u = it.unit && it.unit !== 'kg' ? ` ${escHtml(it.unit)}` : '';
+    return `<span class="ps-art">${escHtml(it.name)} <b>×${q}${u}</b></span>`;
+  }).join('');
+}
+
+async function loadDaySales() {
   try {
-    const data = await api.products.list({ search: query, page: 1, pageSize: 20 });
-    psAllProducts = data.products || [];
-  } catch (e) { psAllProducts = []; }
-}
-
-function renderPsSuggestions() {
-  const box = $('psSuggestions');
-  if (!psAllProducts.length) { box.classList.add('hidden'); return; }
-  box.innerHTML = psAllProducts.map((p) =>
-    `<div class="ps-sug-item" data-id="${p.id}" data-name="${p.name}">${p.name} <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit}</span></div>`
-  ).join('');
-  box.classList.remove('hidden');
-}
-
-async function loadProductSales() {
-  const dates = psGetDates();
-  try {
-    const r = await api.reports.productSales(psSelectedProduct ? psSelectedProduct.id : null, dates);
+    const r = await api.reports.salesDay(psDay);
     $('psResult').classList.remove('hidden');
     $('psEmpty').classList.add('hidden');
-    const p = r.product;
-    $('psProductInfo').innerHTML = p
-      ? `<b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${money(p.selling_price)}/${p.unit} · Stock actual: ${stockNum(p.stock, p.unit)} ${p.unit}</span>`
-      : `<b>Todas las ventas</b> <span class="muted">${r.all ? 'todo el historial' : `${r.start_date} a ${r.end_date}`}</span>`;
     $('psSummary').innerHTML = `
-      <div class="ps-stat"><div class="label">Unidades vendidas</div><div class="value">${p ? `${stockNum(r.summary.qty, p.unit)} ${p.unit}` : num(r.summary.qty, 3)}</div></div>
-      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.revenue)}</div></div>
-      <div class="ps-stat"><div class="label">Transacciones</div><div class="value">${r.summary.tickets}</div></div>`;
+      <div class="ps-stat"><div class="label">Tickets</div><div class="value">${r.summary.tickets}</div></div>
+      <div class="ps-stat"><div class="label">Artículos vendidos</div><div class="value">${num(r.summary.articles, 2)}</div></div>
+      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.total)}</div></div>`;
     const body = $('psBody');
-    if (r.days.length) {
-      body.innerHTML = r.days.map((d) => `
+    body.innerHTML = r.sales.length
+      ? r.sales.map((s) => `
         <tr>
-          <td>${d.day}</td>
-          <td class="num"><b>${p ? `${stockNum(d.qty, p.unit)} ${p.unit}` : num(d.qty, 3)}</b></td>
-          <td class="num">${d.tickets}</td>
-          <td class="num"><b>${moneyMX(d.total)}</b></td>
-        </tr>`).join('');
-    } else {
-      body.innerHTML = `<tr><td colspan="4" class="muted" style="text-align:center;padding:20px;">Sin ventas en el período seleccionado.</td></tr>`;
-    }
+          <td><b>#${String(s.ticket_no || s.id).padStart(6, '0')}</b></td>
+          <td>${s.time}</td>
+          <td><span class="badge badge-ok">${escHtml(s.payment_method)}</span></td>
+          <td>${fmtArticles(s.items)}</td>
+          <td class="num"><b>${moneyMX(s.total_amount)}</b></td>
+        </tr>`).join('')
+      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px;">Sin ventas el ${psDay}.</td></tr>`;
   } catch (e) {
     toast(e.message, 'error');
   }
 }
 
-$('psSearch').addEventListener('input', async (e) => {
-  const q = e.target.value.trim();
-  psSelectedProduct = null;
-  $('psResult').classList.add('hidden');
-  $('psEmpty').classList.remove('hidden');
-  await psSearchProducts(q);
-  renderPsSuggestions();
-});
-
-$('psSuggestions').addEventListener('click', (e) => {
-  const item = e.target.closest('.ps-sug-item');
-  if (!item) return;
-  const id = Number(item.dataset.id);
-  const name = item.dataset.name;
-  psSelectedProduct = psAllProducts.find((p) => p.id === id) || { id, name };
-  $('psSearch').value = name;
-  $('psSuggestions').classList.add('hidden');
-  loadProductSales();
-});
-
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.ps-search-wrap')) {
-    const box = $('psSuggestions');
-    if (box) box.classList.add('hidden');
-  }
-});
-
-$('psPeriod').addEventListener('change', () => {
-  const isCustom = $('psPeriod').value === 'custom';
-  $('psDates').classList.toggle('hidden', !isCustom);
-  loadProductSales();
-});
-
-$('psGo').addEventListener('click', () => {
-  loadProductSales();
-});
-
-$('turnsPeriod').addEventListener('change', () => {
-  const isCustom = $('turnsPeriod').value === 'custom';
-  $('turnsDates').classList.toggle('hidden', !isCustom);
-  loadTurns();
-});
-
-$('turnsGo').addEventListener('click', () => {
-  loadTurns();
-});
-
-if ($('turnsFrom')) $('turnsFrom').value = today;
-if ($('turnsTo')) $('turnsTo').value = today;
-
-if ($('psFrom')) $('psFrom').value = today;
-if ($('psTo')) $('psTo').value = today;
+loadDaySales();
+psCalendar.refreshMarks();
 
 /* ---------------- Entradas y Salidas de stock ---------------- */
 
@@ -598,6 +366,33 @@ const STOCK_PAGE_SIZE = 20;
 let stockCategories = [];
 let stockCategoryId = '';
 let stockProductId = '';
+let stockDate = today;
+let stockSearch = '';
+
+const stockCalendar = createDateCalendar({
+  mount: $('stockCalendar'),
+  value: today,
+  onChange: (day) => {
+    stockDate = day;
+    stockPage = 1;
+    loadStockMovements();
+  },
+  onMonthChange: () => { stockCalendar.refreshMarks(); },
+});
+
+if ($('stockGo')) {
+  $('stockGo').addEventListener('click', () => {
+    stockDate = stockCalendar.getValue();
+    stockPage = 1;
+    loadStockMovements();
+  });
+}
+
+$('stockSearch').addEventListener('input', (e) => {
+  stockSearch = e.target.value.trim();
+  stockPage = 1;
+  loadStockMovements();
+});
 
 async function loadStockCats() {
   try {
@@ -612,126 +407,100 @@ function renderStockCats() {
   const wrap = $('stockCats');
   if (!wrap) return;
   wrap.innerHTML = '';
-  const totalProducts = stockCategories.reduce((s, c) => s + (c.product_count || 0), 0);
   const mk = (label, value, count) => {
     const b = document.createElement('button');
     b.className = `prod-card stock-cat${String(value) === String(stockCategoryId) ? ' active' : ''}`;
     b.innerHTML = `
       <div class="prod-name">${label}</div>
       <div class="prod-count">${count}</div>
-      <div class="prod-meta">producto(s) · movimientos de hoy</div>`;
+      <div class="prod-meta">producto(s) · movimientos del ${stockDate || today}</div>`;
     b.addEventListener('click', () => {
-      stockCategoryId = String(value);
+      stockCategoryId = String(value) === String(stockCategoryId) ? '' : String(value);
       stockProductId = '';
       stockPage = 1;
       renderStockCats();
-      loadStockProducts();
       loadStockMovements();
     });
     wrap.appendChild(b);
   };
-  mk('Todas', '', totalProducts);
+  mk('Todas', '', stockCategories.reduce((s, c) => s + (c.product_count || 0), 0));
   for (const c of stockCategories) mk(c.name, String(c.id), c.product_count || 0);
 }
 
-async function fetchCategoryProducts() {
-  const params = { page: 1, pageSize: 100 };
-  if (stockCategoryId) params.category_id = stockCategoryId;
-  let all = [];
-  let total = Infinity;
-  while (all.length < total) {
-    const data = await api.products.list(params);
-    all = all.concat(data.products);
-    total = data.total;
-    if (!data.products.length) break;
-    params.page++;
-  }
-  return all;
-}
-
-async function loadStockProducts() {
+/* Solo se muestran los productos que SI movieron stock en el día elegido,
+   para no llenarse de tarjetas de los 112 productos del inventario. */
+function renderStockProducts(list) {
   const wrap = $('stockProducts');
+  const head = $('stockProductsHead');
   if (!wrap) return;
   wrap.innerHTML = '';
-  try {
-    const list = await fetchCategoryProducts();
-    if (!list.length) { wrap.classList.add('hidden'); return; }
-    wrap.classList.remove('hidden');
-    for (const p of list) {
-      const b = document.createElement('button');
-      b.className = `prod-card stock-prod${String(p.id) === String(stockProductId) ? ' active' : ''}`;
-      b.title = p.barcode || '';
-      b.innerHTML = `
-        <div class="prod-name">${p.name}</div>
-        <div class="prod-count">${stockNum(p.stock, p.unit)} ${p.unit}</div>
-        <div class="prod-meta">stock actual${p.is_bote ? ' · bote' : ''}</div>`;
-      b.addEventListener('click', () => {
-        stockProductId = String(p.id) === String(stockProductId) ? '' : String(p.id);
-        stockPage = 1;
-        loadStockProducts();
-        loadStockMovements();
-      });
-      wrap.appendChild(b);
-    }
-  } catch (e) {
-    wrap.classList.add('hidden');
-  }
-}
 
-async function loadStockProductInfo() {
-  const box = $('stockProductInfo');
-  if (!box) return;
-  if (!stockProductId) { box.innerHTML = ''; return; }
-  try {
-    const r = await api.reports.product(stockProductId, { date: today });
-    const p = r.product;
-    box.innerHTML = `
-      <div class="product-stock-info">
-        <div class="psi-head"><b>${p.name}</b> <span class="muted">${p.barcode || ''} · ${p.unit}</span></div>
-        <div class="psi-grid">
-          <div class="psi-box"><div class="label">Entradas hoy</div><div class="value ok">+${stockNum(r.entradas, p.unit)} ${p.unit}</div></div>
-          <div class="psi-box"><div class="label">Salidas hoy</div><div class="value err">-${stockNum(r.salidas, p.unit)} ${p.unit}</div></div>
-          <div class="psi-box"><div class="label">Stock que quedó</div><div class="value">${stockNum(p.stock, p.unit)} ${p.unit}</div></div>
-        </div>
-      </div>`;
-  } catch (e) {
-    box.innerHTML = '';
+const catName = stockCategoryId ? (stockCategories.find((c) => String(c.id) === stockCategoryId) || {}).name : '';
+  const label = catName || '';
+  if (list.length) {
+    head.hidden = false;
+    head.textContent = `Movieron stock · ${list.length} producto(s)${label ? ` · ${label}` : ''}`;
+  } else {
+    head.hidden = false;
+    head.textContent = `Sin movimientos de stock el ${stockDate || today}${label ? ` · ${label}` : ''}.`;
+  }
+
+  if (!list.length) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  for (const p of list) {
+    const b = document.createElement('button');
+    b.className = `prod-card stock-prod${String(p.id) === String(stockProductId) ? ' active' : ''}`;
+    b.title = p.barcode || '';
+    const bits = [];
+    if (p.entradas > 0) bits.push(`<span class="ok">+${stockNum(p.entradas, p.unit)}</span>`);
+    if (p.salidas > 0) bits.push(`<span class="err">-${stockNum(p.salidas, p.unit)}</span>`);
+    b.innerHTML = `
+      <div class="prod-name">${escHtml(p.name)}</div>
+      <div class="prod-count">${bits.join(' · ')}</div>
+      <div class="prod-meta">stock ${stockNum(p.stock, p.unit)} ${p.unit}${p.is_bote ? ' · bote' : ''}</div>`;
+    b.addEventListener('click', () => {
+      stockProductId = String(p.id) === String(stockProductId) ? '' : String(p.id);
+      stockPage = 1;
+      loadStockMovements();
+    });
+    wrap.appendChild(b);
   }
 }
 
 async function loadStockMovements() {
   try {
     const data = await api.stock.movements({
-      date: today,
+      date: stockDate,
       category_id: stockProductId ? '' : stockCategoryId,
       product_id: stockProductId,
+      search: stockSearch,
       page: stockPage,
       pageSize: STOCK_PAGE_SIZE,
     });
-    loadStockProductInfo();
+    renderStockProducts(data.products || []);
     const body = $('stockBody');
     body.innerHTML = data.movements.length
       ? data.movements.map((m) => `
         <tr>
           <td>${String(m.created_at).slice(11, 16)}</td>
-          <td><b>${m.product_name}</b></td>
+          <td><b>${escHtml(m.product_name)}</b></td>
           <td class="num">${m.type === 'entrada' ? `<b class="ok">+${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
           <td class="num">${m.type === 'salida' ? `<b class="err">-${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
-          <td class="muted">${m.reason || '—'}</td>
+          <td class="muted">${escHtml(m.reason || '—')}</td>
         </tr>`).join('')
-      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px;">Sin movimientos de stock hoy.</td></tr>`;
+      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px;">Sin movimientos de stock el ${stockDate || today}.</td></tr>`;
 
-    const wrap = $('stockPagination');
+const pag = $('stockPagination');
     const totalPages = Math.max(1, Math.ceil(data.total / STOCK_PAGE_SIZE));
-    wrap.innerHTML = '';
+    pag.innerHTML = '';
     if (totalPages > 1) {
-      const mk = (label, page, disabled, primary = false) => {
+      const mk = (label2, page, disabled, primary = false) => {
         const b = document.createElement('button');
         b.className = `btn btn-sm ${primary ? '' : 'btn-outline'}`;
-        b.textContent = label;
+        b.textContent = label2;
         b.disabled = disabled;
         b.addEventListener('click', () => { stockPage = page; loadStockMovements(); });
-        wrap.appendChild(b);
+        pag.appendChild(b);
       };
       mk('‹ Ant', stockPage - 1, stockPage === 1);
       mk(`Pág ${stockPage}/${totalPages}`, stockPage, true, true);
@@ -741,11 +510,10 @@ async function loadStockMovements() {
     toast(e.message, 'error');
   }
 }
-
 if ($('stockToggle')) {
   initCardToggle('stockToggle', 'stockContent', 'pos_stock_card');
 }
 
 loadStockCats();
-loadStockProducts();
 loadStockMovements();
+stockCalendar.refreshMarks();

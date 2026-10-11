@@ -229,6 +229,7 @@ tfoot tr.turns-total td { border-bottom: none; }
 .badge-warn { background: var(--warning-bg); color: var(--warning); }
 .badge-ok { background: var(--success-bg); color: var(--success); }
 .badge-recipe { background: #e3f2fd; color: #1565c0; margin-left: 4px; }
+.badge-blue { background: var(--accent-light); color: var(--accent-dark); }
 .alert {
   padding: 10px 14px;
   border-radius: 8px;
@@ -785,6 +786,111 @@ tfoot tr.turns-total td { border-bottom: none; }
 }
 .suggest-item:hover { background: #fbf6f0; }
 
+.stock-products-head {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-muted);
+}
+
+/* ---------- Calendario con marcadores ---------- */
+.cal { position: relative; display: inline-block; }
+.cal-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.cal-trigger:hover { border-color: var(--primary); }
+.cal-caret { font-size: 11px; color: var(--text-muted); }
+
+.cal-pop {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 268px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+}
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.cal-title { font-weight: 800; font-size: 14px; color: var(--primary-dark); }
+.cal-nav {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  color: var(--text);
+}
+.cal-nav:hover { border-color: var(--primary); background: var(--primary-light); }
+
+.cal-dow, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-dow { margin-bottom: 4px; }
+.cal-dow span { text-align: center; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+
+.cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.cal-cell.empty { cursor: default; }
+.cal-cell:not(.empty):not(.is-future):hover { background: var(--primary-light); border-color: var(--primary); }
+.cal-cell.is-future { color: var(--text-muted); opacity: .4; cursor: not-allowed; }
+.cal-cell.is-today { border-color: var(--primary); }
+.cal-cell.is-sel { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 800; }
+.cal-cell.has-in { background: var(--success-bg); }
+.cal-cell.has-out { background: var(--danger-bg); }
+.cal-cell.has-in.has-out { background: var(--accent-light); }
+.cal-cell.is-sel .cal-num { color: #fff; }
+
+.cal-dots { display: flex; gap: 2px; height: 5px; align-items: center; }
+.cal-dots i, .cal-legend i { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+.cal-dots i.in, .cal-legend i.in { background: var(--success); }
+.cal-dots i.out, .cal-legend i.out { background: var(--danger); }
+
+.cal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.cal-legend { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+.cal-legend i { margin-left: 4px; }
+.cal-dots i.sale, .cal-legend i.sale { background: var(--primary); }
+
+/* Chips de artículos en ventas del día */
+.ps-art { display: inline-block; margin: 0 8px 3px 0; font-size: 12.5px; color: var(--text); }
+.ps-art b { color: var(--coffee-dark); }
+
 /* ---------- Ventas por producto ---------- */
 .ps-controls { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 .ps-search-wrap { position: relative; }
@@ -810,6 +916,22 @@ tfoot tr.turns-total td { border-bottom: none; }
 .ps-stat { text-align: center; flex: 1; min-width: 100px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
 .ps-stat .label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
 .ps-stat .value { font-size: 18px; font-weight: 800; color: var(--coffee-dark); }
+.ps-stat .value.err { color: var(--danger); }
+
+/* ---------- Surtidos / Lotes ---------- */
+.surtidos-wrap { margin-bottom: 12px; padding: 10px 12px; background: #fff8e1; border: 1px solid #f0df9f; border-radius: 8px; }
+.surtidos-label { font-size: 12px; font-weight: 700; color: #8a6d1a; margin-bottom: 6px; }
+.surtidos-wrap select {
+  width: 100%; padding: 8px 10px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 8px; background: #fff;
+}
+.surtido-head { font-size: 13px; color: var(--coffee-dark); margin-bottom: 8px; }
+.surtido-link {
+  display: block; margin-top: 4px; border: none; cursor: pointer; text-align: left;
+  background: #e8f5e9; color: #2e7d32; border-radius: 99px; padding: 3px 10px;
+  font-size: 11px; font-weight: 700; font-family: inherit;
+}
+.surtido-link:hover { background: #c8e6c9; }
 
 .stock-cats {
   display: grid;

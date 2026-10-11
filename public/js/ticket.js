@@ -6,12 +6,6 @@ function pad(n, w) { return String(n).padStart(w, '0'); }
 
 function padZ(n) { return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-function escHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 function fmtPza(n) {
   return String(Math.round(Number(n) * 100) / 100);
 }

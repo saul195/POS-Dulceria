@@ -27,6 +27,14 @@
         <div class="value" id="statTotal">$0.00 MXN</div>
       </div>
       <div class="stat">
+        <div class="label">Compras del día (MXN)</div>
+        <div class="value" id="statCost">$0.00 MXN</div>
+      </div>
+      <div class="stat">
+        <div class="label">Utilidad del día (MXN)</div>
+        <div class="value" id="statProfit">$0.00 MXN</div>
+      </div>
+      <div class="stat">
         <div class="label">Transacciones</div>
         <div class="value" id="statCount">0</div>
       </div>
@@ -86,6 +94,11 @@
               <button class="btn btn-sm seg-btn" data-mode="month">Mes</button>
               <button class="btn btn-sm seg-btn" data-mode="year">Año</button>
             </div>
+            <div class="seg">
+              <button class="btn btn-sm metric-btn active" data-metric="total">Ventas</button>
+              <button class="btn btn-sm metric-btn" data-metric="cost">Compras</button>
+              <button class="btn btn-sm metric-btn" data-metric="profit">Utilidad</button>
+            </div>
             <div class="chart-controls" id="chartControls" style="display:none;">
               <select id="chartMonth" style="width:auto;"></select>
               <select id="chartYear" style="width:auto;"></select>
@@ -124,6 +137,8 @@
                     <th>Producto</th>
                     <th class="num">Entrada</th>
                     <th class="num">Salida</th>
+                    <th class="num">Costo unit.</th>
+                    <th class="num">Costo total</th>
                     <th>Motivo</th>
                   </tr>
                 </thead>

@@ -220,6 +220,7 @@ async function openEntryModal() {
   $('entrySearch').value = '';
   $('entrySuggestions').innerHTML = '';
   $('entryNewStock').value = '';
+  $('entryTotalCost').value = '';
   $('entryReason').value = '';
   updateEntryStockInfo();
   $('entryModal').classList.add('show');
@@ -271,13 +272,15 @@ function updateEntryStockInfo() {
 function updateEntryCalc() {
   const p = selectedEntryProduct();
   const qty = r3(parseFloat($('entryNewStock').value));
+  const totalCost = Math.round((parseFloat($('entryTotalCost').value) || 0) * 100) / 100;
   const current = p ? r3(p.stock) : 0;
   const hint = $('entryCalc');
   if (!(qty > 0)) {
     hint.textContent = `Se suman: 0 · escribe cuánto llega${p ? ` (${p.unit})` : ''}`;
     hint.style.color = 'var(--danger)';
   } else {
-    hint.textContent = `Se suman ${stockNum(qty, p ? p.unit : '')} ${p ? p.unit : ''} → quedará ${stockNum(current + qty, p ? p.unit : '')} ${p ? p.unit : ''}`;
+    const unitNote = totalCost > 0 ? ` · ${money(totalCost / qty)} por ${p ? p.unit : 'unidad'}` : '';
+    hint.textContent = `Se suman ${stockNum(qty, p ? p.unit : '')} ${p ? p.unit : ''} → quedará ${stockNum(current + qty, p ? p.unit : '')} ${p ? p.unit : ''}${unitNote}`;
     hint.style.color = '';
   }
 }
@@ -300,11 +303,13 @@ async function saveStockEntry() {
   if (!p) return toast('Selecciona un producto', 'error');
   const quantity = r3(parseFloat($('entryNewStock').value));
   if (!(quantity > 0)) return toast('Escribe la cantidad que llega (mayor a 0)', 'error');
+  const totalCostRaw = parseFloat($('entryTotalCost').value);
   try {
     const r = await api.stock.entry({
       product_id: p.id,
       quantity,
       reason: $('entryReason').value.trim(),
+      total_cost: Number.isNaN(totalCostRaw) ? null : totalCostRaw,
     });
     $('entryModal').classList.remove('show');
     toast(`Entrada registrada. Stock actual: ${stockNum(r.stock, p.unit)} ${p.unit}`);
@@ -325,6 +330,7 @@ $('entryNewStock').addEventListener('blur', () => {
   if (v.value !== '') v.value = r3(parseFloat(v.value));
   updateEntryCalc();
 });
+$('entryTotalCost').addEventListener('input', updateEntryCalc);
 $('entrySave').addEventListener('click', saveStockEntry);
 $('entryCancel').addEventListener('click', () => $('entryModal').classList.remove('show'));
 

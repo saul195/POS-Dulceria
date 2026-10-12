@@ -181,6 +181,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   type       TEXT NOT NULL CHECK (type IN ('entrada', 'salida')),
   quantity   REAL NOT NULL,
   reason     TEXT DEFAULT '',
+  unit_cost  REAL,
+  total_cost REAL,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
@@ -189,6 +191,17 @@ CREATE INDEX IF NOT EXISTS idx_mov_product   ON stock_movements(product_id);
 CREATE INDEX IF NOT EXISTS idx_mov_created   ON stock_movements(created_at);
 CREATE INDEX IF NOT EXISTS idx_sales_ticket  ON sales(ticket_no);
 `);
+
+const movementCols = db.prepare('PRAGMA table_info(stock_movements)').all().map((c) => c.name);
+if (!movementCols.includes('unit_cost')) {
+  db.exec('ALTER TABLE stock_movements ADD COLUMN unit_cost REAL');
+  console.log('[db] Columna unit_cost agregada a stock_movements');
+}
+if (!movementCols.includes('total_cost')) {
+  db.exec('ALTER TABLE stock_movements ADD COLUMN total_cost REAL');
+  console.log('[db] Columna total_cost agregada a stock_movements');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_mov_type ON stock_movements(type)');
 
 db.exec(`
   UPDATE products SET stock = round(stock, 3), min_stock = round(min_stock, 3);

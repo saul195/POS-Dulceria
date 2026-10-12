@@ -15,8 +15,10 @@ const moneyShort = (n) => {
 };
 
 let chartMode = 'week';
+let chartMetric = 'total';
 let chartYear = dNow.getFullYear();
 let chartMonth = dNow.getMonth() + 1;
+let lastRange = null;
 
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -50,21 +52,24 @@ function renderChart(r) {
   const meta = $('chartMeta');
   const wrap = $('chartWrap');
   if (!meta || !wrap) return;
-  meta.textContent = `${r.title} — ${r.totals.count} venta(s) · ${moneyMX(r.totals.total)}`;
+  const t = r.totals || {};
+  meta.innerHTML = `${r.title} — ${t.count} venta(s) · Ventas ${moneyMX(t.total)} · Compras ${moneyMX(t.cost || 0)} · <b style="color:${(t.profit || 0) < 0 ? 'var(--danger)' : 'var(--success, #2e7d32)'}">Utilidad ${moneyMX(t.profit || 0)}</b>`;
   if (!r.data.length) {
     wrap.innerHTML = '<div class="chart-empty">Sin ventas en el período.</div>';
     return;
   }
-  const max = Math.max(1, ...r.data.map((b) => b.total));
+  const max = Math.max(1, ...r.data.map((b) => Number(b[chartMetric]) || 0));
   const bars = r.data.map((b) => {
     const label = r.mode === 'year' ? ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][b.month - 1]
       : r.mode === 'week' ? (b.weekday || b.day)
       : String(b.day).padStart(2, '0');
-    const h = b.total > 0 ? Math.max(3, (b.total / max) * 170) : 2;
+    const val = Number(b[chartMetric]) || 0;
+    const h = val > 0 ? Math.max(3, (val / max) * 170) : 2;
+    const cls = val > 0 ? `bar-${chartMetric}` : (val < 0 ? 'bar-neg' : 'zero');
     return `
-      <div class="bar-col" title="${label}: ${moneyMX(b.total)} (${b.count} venta${b.count === 1 ? '' : 's'})">
-        <div class="bar-val">${b.total > 0 ? moneyShort(b.total) : ''}</div>
-        <div class="bar-fill ${b.total > 0 ? '' : 'zero'}" style="height:${h}px"></div>
+      <div class="bar-col" title="${label}: Ventas ${moneyMX(b.total)} · Compras ${moneyMX(b.cost || 0)} · Utilidad ${moneyMX(b.profit || 0)} (${b.count} venta${b.count === 1 ? '' : 's'})">
+        <div class="bar-val">${val !== 0 ? moneyShort(val) : ''}</div>
+        <div class="bar-fill ${cls}" style="height:${h}px"></div>
         <div class="bar-lbl">${label}</div>
       </div>`;
   }).join('');
@@ -77,6 +82,7 @@ async function loadChart() {
     if (chartMode === 'month') { opts.year = chartYear; opts.month = chartMonth; }
     else if (chartMode === 'year') { opts.year = chartYear; }
     const r = await api.reports.range(chartMode, opts);
+    lastRange = r;
     renderChart(r);
   } catch (e) {
     toast(e.message, 'error');
@@ -89,6 +95,13 @@ async function loadReports() {
     $('reportDate').textContent = `(${r.date})`;
     $('statTotal').textContent = moneyMX(r.summary.total_sales);
     $('statCount').textContent = r.summary.transactions;
+    const costEl = $('statCost');
+    const profitEl = $('statProfit');
+    if (costEl) costEl.textContent = moneyMX(r.summary.cost || 0);
+    if (profitEl) {
+      profitEl.textContent = moneyMX(r.summary.profit || 0);
+      profitEl.style.color = (r.summary.profit || 0) < 0 ? 'var(--danger)' : '';
+    }
 
     const top = $('topList');
     top.innerHTML = r.top_products.length
@@ -283,6 +296,15 @@ document.querySelectorAll('.seg-btn').forEach((btn) => {
   });
 });
 
+document.querySelectorAll('.metric-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.metric-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    chartMetric = btn.dataset.metric;
+    if (lastRange) renderChart(lastRange);
+  });
+});
+
 const chartGo = $('chartGo');
 if (chartGo) {
   chartGo.addEventListener('click', () => {
@@ -339,7 +361,9 @@ async function loadDaySales() {
     $('psSummary').innerHTML = `
       <div class="ps-stat"><div class="label">Tickets</div><div class="value">${r.summary.tickets}</div></div>
       <div class="ps-stat"><div class="label">Artículos vendidos</div><div class="value">${num(r.summary.articles, 2)}</div></div>
-      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.total)}</div></div>`;
+      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.total)}</div></div>
+      <div class="ps-stat"><div class="label">Compras (entradas)</div><div class="value">${moneyMX(r.summary.cost || 0)}</div></div>
+      <div class="ps-stat"><div class="label">Utilidad</div><div class="value ${(r.summary.profit || 0) < 0 ? 'err' : ''}">${moneyMX(r.summary.profit || 0)}</div></div>`;
     const body = $('psBody');
     body.innerHTML = r.sales.length
       ? r.sales.map((s) => `
@@ -486,9 +510,11 @@ async function loadStockMovements() {
           <td><b>${escHtml(m.product_name)}</b></td>
           <td class="num">${m.type === 'entrada' ? `<b class="ok">+${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
           <td class="num">${m.type === 'salida' ? `<b class="err">-${stockNum(m.quantity, m.unit)} ${m.unit}</b>` : ''}</td>
+          <td class="num">${m.unit_cost != null ? moneyMX(m.unit_cost) : '<span class="muted">—</span>'}</td>
+          <td class="num">${m.total_cost != null ? `<b>${moneyMX(m.total_cost)}</b>` : '<span class="muted">—</span>'}</td>
           <td class="muted">${escHtml(m.reason || '—')}</td>
         </tr>`).join('')
-      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px;">Sin movimientos de stock el ${stockDate || today}.</td></tr>`;
+      : `<tr><td colspan="7" class="muted" style="text-align:center;padding:20px;">Sin movimientos de stock el ${stockDate || today}.</td></tr>`;
 
 const pag = $('stockPagination');
     const totalPages = Math.max(1, Math.ceil(data.total / STOCK_PAGE_SIZE));

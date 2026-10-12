@@ -179,8 +179,12 @@
           <input type="number" id="entryCurrentStock" readonly>
         </div>
         <div class="form-field">
-          <label>Stock nuevo (cantidad que llega y se suma) *</label>
-          <input type="number" id="entryNewStock" step="0.001" min="0" placeholder="Ej. 10">
+          <label>Cantidad que llega *</label>
+          <input type="number" id="entryNewStock" step="0.001" min="0" placeholder="Ej. 0.400">
+        </div>
+        <div class="form-field full">
+          <label>Costo total de la entrada ($)</label>
+          <input type="number" id="entryTotalCost" step="0.01" min="0" placeholder="Ej. 85.00">
         </div>
       </div>
       <div class="hint mb" id="entryCalc">Entran: —</div>

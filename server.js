@@ -372,20 +372,33 @@ app.delete('/api/sales/:id', (req, res) => {
 /* ============================ MOVIMIENTOS DE STOCK ============================ */
 
 app.post('/api/stock/entry', (req, res) => {
-  const { product_id, quantity, reason = '' } = req.body || {};
+  const { product_id, quantity, reason = '', unit_cost, total_cost } = req.body || {};
   const qty = round3(Number(quantity));
   if (!Number(product_id)) return res.status(400).json({ error: 'Falta el producto' });
   if (!(qty > 0)) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
   const p = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(product_id));
   if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
+
+  let cost = null;
+  let totalCost = null;
+  if (total_cost != null && total_cost !== '') {
+    totalCost = round2(Number(total_cost));
+    if (!(totalCost >= 0)) return res.status(400).json({ error: 'El costo total de la entrada no es válido' });
+    cost = qty > 0 ? round2(totalCost / qty) : null;
+  } else if (unit_cost != null && unit_cost !== '') {
+    cost = round2(Number(unit_cost));
+    if (!(cost >= 0)) return res.status(400).json({ error: 'El precio de compra no es válido' });
+    totalCost = round2(cost * qty);
+  }
+
   const addStock = db.transaction(() => {
     db.prepare('UPDATE products SET stock = round(stock + ?, 3) WHERE id = ?').run(qty, p.id);
-    const info = db.prepare('INSERT INTO stock_movements (product_id, type, quantity, reason) VALUES (?, ?, ?, ?)')
-      .run(p.id, 'entrada', qty, String(reason || 'Entrada de mercancía'));
+    const info = db.prepare('INSERT INTO stock_movements (product_id, type, quantity, reason, unit_cost, total_cost) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(p.id, 'entrada', qty, String(reason || 'Entrada de mercancía'), cost, totalCost);
     return info.lastInsertRowid;
   })();
   const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(p.id);
-  res.status(201).json({ ok: true, stock: updated.stock, movement_id: addStock });
+  res.status(201).json({ ok: true, stock: updated.stock, movement_id: addStock, unit_cost: cost, total_cost: totalCost });
 });
 
 /* Días con movimientos de stock, para marcar el calendario. */
@@ -442,7 +455,8 @@ app.get('/api/stock/movements', (req, res) => {
   ).all(...params, size, (pageNum - 1) * size);
   const summary = db.prepare(
     `SELECT COALESCE(SUM(CASE WHEN type = 'entrada' THEN quantity ELSE 0 END), 0) AS entradas,
-            COALESCE(SUM(CASE WHEN type = 'salida' THEN quantity ELSE 0 END), 0) AS salidas
+            COALESCE(SUM(CASE WHEN type = 'salida' THEN quantity ELSE 0 END), 0) AS salidas,
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN total_cost ELSE 0 END), 0) AS costo
      FROM stock_movements m JOIN products p ON p.id = m.product_id ${whereSql}`
   ).get(...params);
 
@@ -568,10 +582,16 @@ app.get('/api/reports/sales-day', (req, res) => {
       items,
     };
   });
+  const entries = db.prepare(
+    `SELECT COALESCE(SUM(total_cost), 0) AS cost
+     FROM stock_movements WHERE type = 'entrada' AND total_cost IS NOT NULL AND date(created_at) = ?`
+  ).get(day);
+  const cost = round2(Number(entries.cost) || 0);
+  const totalSales = round2(total);
   res.json({
     date: day,
     sales: list,
-    summary: { tickets: list.length, articles: round3(articles), total: round2(total) },
+    summary: { tickets: list.length, articles: round3(articles), total: totalSales, cost, profit: round2(totalSales - cost) },
   });
 });
 
@@ -815,6 +835,27 @@ const salesByMonthRange = (since, until) => db.prepare(
    FROM sales WHERE created_at >= ? AND created_at <= ? GROUP BY month ORDER BY month`
 ).all(since, until);
 
+const costsByDay = (since) => db.prepare(
+  `SELECT date(created_at) AS day, COALESCE(SUM(total_cost), 0) AS cost
+   FROM stock_movements WHERE type = 'entrada' AND total_cost IS NOT NULL AND created_at >= ? GROUP BY day`
+).all(since);
+
+const costsByDayRange = (since, until) => db.prepare(
+  `SELECT date(created_at) AS day, COALESCE(SUM(total_cost), 0) AS cost
+   FROM stock_movements WHERE type = 'entrada' AND total_cost IS NOT NULL AND created_at >= ? AND created_at <= ? GROUP BY day`
+).all(since, until);
+
+const costsByMonthRange = (since, until) => db.prepare(
+  `SELECT strftime('%Y-%m', created_at) AS month, COALESCE(SUM(total_cost), 0) AS cost
+   FROM stock_movements WHERE type = 'entrada' AND total_cost IS NOT NULL AND created_at >= ? AND created_at <= ? GROUP BY month`
+).all(since, until);
+
+const toCostMap = (rows, key) => {
+  const map = {};
+  for (const r of rows) map[r[key]] = round2(Number(r.cost) || 0);
+  return map;
+};
+
 app.get('/api/reports/range', (req, res) => {
   const mode = String(req.query.mode || 'week');
   const now = new Date();
@@ -832,9 +873,11 @@ app.get('/api/reports/range', (req, res) => {
     const since = `${fmt(first)} 00:00:00`;
     const until = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')} 23:59:59`;
     data = salesByDayRange(since, until);
+    const costMap = toCostMap(costsByDayRange(since, until), 'day');
     const buckets = {};
     for (let d = 1; d <= daysInMonth; d++) {
-      buckets[`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`] = { day: String(d), count: 0, total: 0 };
+      const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      buckets[key] = { day: String(d), count: 0, total: 0, cost: costMap[key] || 0 };
     }
     for (const r of data) {
       if (buckets[r.day]) {
@@ -842,17 +885,18 @@ app.get('/api/reports/range', (req, res) => {
         buckets[r.day].total = Math.round(r.total * 100) / 100;
       }
     }
-    data = Object.values(buckets).map((b) => ({ ...b, total: Math.round(b.total * 100) / 100 }));
+    data = Object.values(buckets);
     const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     title = `Mes ${MONTHS_ES[month - 1]} ${year}`;
   } else if (mode === 'year') {
     const since = `${year}-01-01 00:00:00`;
     const until = `${year}-12-31 23:59:59`;
     data = salesByMonthRange(since, until);
+    const costMap = toCostMap(costsByMonthRange(since, until), 'month');
     const buckets = {};
     for (let m = 1; m <= 12; m++) {
       const key = `${year}-${String(m).padStart(2, '0')}`;
-      buckets[key] = { month: m, count: 0, total: 0 };
+      buckets[key] = { month: m, count: 0, total: 0, cost: costMap[key] || 0 };
     }
     for (const r of data) {
       if (buckets[r.month]) {
@@ -860,7 +904,7 @@ app.get('/api/reports/range', (req, res) => {
         buckets[r.month].total = Math.round(r.total * 100) / 100;
       }
     }
-    data = Object.values(buckets).map((b) => ({ ...b, total: Math.round(b.total * 100) / 100 }));
+    data = Object.values(buckets);
     title = `Año ${year}`;
   } else {
     const dow = now.getDay() || 7;
@@ -868,11 +912,13 @@ app.get('/api/reports/range', (req, res) => {
     monday.setDate(now.getDate() - (dow - 1));
     const since = `${fmt(monday)} 00:00:00`;
     data = salesByDay(since);
+    const costMap = toCostMap(costsByDay(since), 'day');
     const buckets = {};
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      buckets[fmt(d)] = { day: fmt(d), weekday: d.toLocaleDateString('es-MX', { weekday: 'short' }), count: 0, total: 0 };
+      const key = fmt(d);
+      buckets[key] = { day: key, weekday: d.toLocaleDateString('es-MX', { weekday: 'short' }), count: 0, total: 0, cost: costMap[key] || 0 };
     }
     for (const r of data) {
       if (buckets[r.day]) {
@@ -884,8 +930,30 @@ app.get('/api/reports/range', (req, res) => {
     title = `Semana del ${fmt(monday)}`;
   }
 
-  const totals = data.reduce((acc, b) => ({ count: acc.count + b.count, total: acc.total + b.total }), { count: 0, total: 0 });
-  res.json({ mode, title, today, data, totals: { count: totals.count, total: round2(totals.total) } });
+  data = data.map((b) => {
+    const total = round2(Number(b.total) || 0);
+    const cost = round2(Number(b.cost) || 0);
+    return { ...b, total, cost, profit: round2(total - cost) };
+  });
+
+  const totals = data.reduce((acc, b) => ({
+    count: acc.count + b.count,
+    total: acc.total + b.total,
+    cost: acc.cost + b.cost,
+    profit: acc.profit + b.profit,
+  }), { count: 0, total: 0, cost: 0, profit: 0 });
+  res.json({
+    mode,
+    title,
+    today,
+    data,
+    totals: {
+      count: totals.count,
+      total: round2(totals.total),
+      cost: round2(totals.cost),
+      profit: round2(totals.profit),
+    },
+  });
 });
 
 app.get('/api/reports/today', (req, res) => {
@@ -925,11 +993,20 @@ app.get('/api/reports/today', (req, res) => {
     ? { ...session, today_sales: round2(summary.total_sales), turn_sales: turnSales, expected: round2((session.opening_amount || 0) + turnSales) }
     : null;
 
+  const entries = db.prepare(
+    `SELECT COALESCE(SUM(total_cost), 0) AS cost, COALESCE(SUM(quantity), 0) AS qty
+     FROM stock_movements WHERE type = 'entrada' AND total_cost IS NOT NULL AND created_at >= ?`
+  ).get(start);
+  const cost = round2(Number(entries.cost) || 0);
+  const totalSales = round2(summary.total_sales);
+
   res.json({
     date: String(start).slice(0, 10),
     summary: {
       transactions: summary.transactions,
-      total_sales: round2(summary.total_sales),
+      total_sales: totalSales,
+      cost,
+      profit: round2(totalSales - cost),
     },
     top_products: top.map((t) => ({ ...t, qty: round3(t.qty) })),
     by_payment_method: byMethod,

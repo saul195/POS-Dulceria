@@ -318,12 +318,26 @@ if (chartGo) {
 
 let psDay = today;
 
+let psMode = 'day';
+let psView = 'ticket';
+let psTicketSearch = '';
+let psProductSearch = '';
+let psStart = today;
+let psEnd = today;
+let psPage = 1;
+const PS_PAGE_SIZE = 20;
+
 const psCalendar = createDateCalendar({
   mount: $('psCalendar'),
   value: today,
   onChange: (day) => {
     psDay = day;
-    loadDaySales();
+    psMode = 'day';
+    psPage = 1;
+    document.querySelectorAll('[data-ps-mode]').forEach((b) => b.classList.toggle('active', b.dataset.psMode === 'day'));
+    const rr = document.getElementById('psRangeRow');
+    if (rr) rr.style.display = 'none';
+    loadPSList();
   },
   onMonthChange: () => { psCalendar.refreshMarks(); },
   legend: '<i class="sale"></i> ventas',
@@ -332,7 +346,7 @@ const psCalendar = createDateCalendar({
     return (r.days || []).map((d) => ({
       day: d.day,
       dots: ['sale'],
-      title: `${d.count} venta${d.count === 1 ? '' : 's'} · ${moneyMX(d.total)}`,
+      title: `${d.count} venta${d.count === 1 ? '' : 's'} �� ${moneyMX(d.total)}`,
     }));
   },
 });
@@ -340,47 +354,182 @@ const psCalendar = createDateCalendar({
 if ($('psGo')) {
   $('psGo').addEventListener('click', () => {
     psDay = psCalendar.getValue();
-    loadDaySales();
+    psMode = 'day';
+    psPage = 1;
+    document.querySelectorAll('[data-ps-mode]').forEach((b) => b.classList.toggle('active', b.dataset.psMode === 'day'));
+    const rr = document.getElementById('psRangeRow');
+    if (rr) rr.style.display = 'none';
+    loadPSList();
   });
 }
 
+document.querySelectorAll('[data-ps-mode]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-ps-mode]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    psMode = btn.dataset.psMode;
+    psPage = 1;
+    const rr = document.getElementById('psRangeRow');
+    if (rr) rr.style.display = psMode === 'range' ? 'flex' : 'none';
+    if (psMode !== 'range') loadPSList();
+  });
+});
+
+document.querySelectorAll('[data-ps-view]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-ps-view]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    psView = btn.dataset.psView;
+    psPage = 1;
+    const t = document.getElementById('psTableTicket');
+    const i = document.getElementById('psTableItems');
+    if (t) t.style.display = psView === 'ticket' ? '' : 'none';
+    if (i) i.style.display = psView === 'items' ? '' : 'none';
+    loadPSList();
+  });
+});
+
+const psApplyRange = $('psApplyRange');
+if (psApplyRange) {
+  psApplyRange.addEventListener('click', () => {
+    const s = document.getElementById('psStartDate');
+    const e = document.getElementById('psEndDate');
+    if (s && s.value) psStart = s.value;
+    if (e && e.value) psEnd = e.value;
+    psPage = 1;
+    loadPSList();
+  });
+}
+
+const pts = $('psTicketSearch');
+if (pts) { pts.style.display = 'none'; }
+const pps = $('psProductSearch');
+if (pps) pps.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); psProductSearch = e.target.value.trim(); psPage = 1; loadPSList(); } });
+if (pps) pps.addEventListener('input', (e) => { psProductSearch = e.target.value.trim(); psPage = 1; loadPSList(); });
+
 function fmtArticles(items) {
-  if (!items || !items.length) return '<span class="muted">—</span>';
+  if (!items || !items.length) return '<span class="muted">�?"</span>';
   return items.map((it) => {
     const q = it.unit === 'kg' ? num(it.qty, 3) : num(it.qty, 2);
     const u = it.unit && it.unit !== 'kg' ? ` ${escHtml(it.unit)}` : '';
-    return `<span class="ps-art">${escHtml(it.name)} <b>×${q}${u}</b></span>`;
+    return `<span class="ps-art">${escHtml(it.name)} <b>�-${q}${u}</b></span>`;
   }).join('');
 }
 
-async function loadDaySales() {
+async function loadPSList() {
   try {
-    const r = await api.reports.salesDay(psDay);
+    if (psView === 'items') {
+      let params = { page: psPage, pageSize: PS_PAGE_SIZE, product_search: psProductSearch };
+      if (psMode === 'day') params.date = psDay;
+      else if (psMode === 'week') {
+        const d = new Date(psDay + 'T00:00:00');
+        const dow = d.getDay() || 7;
+        const mon = new Date(d); mon.setDate(d.getDate()-(dow-1));
+        const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+        params.start_date = mon.toISOString().slice(0,10); params.end_date = sun.toISOString().slice(0,10);
+      } else if (psMode === 'month') {
+        const d = new Date(psDay + 'T00:00:00');
+        const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+        const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+        const e = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+        params.start_date = s; params.end_date = e;
+      } else if (psMode === 'range') {
+        params.start_date = psStart; params.end_date = psEnd;
+      }
+      const data = await api.reports.salesItems(params);
+      $('psResult').classList.remove('hidden');
+      $('psEmpty').classList.add('hidden');
+      let totalPagado = 0;
+      for (const it of (data.items||[])) totalPagado += Number(it.subtotal||0);
+      $('psSummary').innerHTML = `
+        <div class="ps-stat"><div class="label">Conceptos</div><div class="value">${data.total||0}</div></div>
+        <div class="ps-stat"><div class="label">Total pagado</div><div class="value">${moneyMX(totalPagado)}</div></div>`;
+      const body = document.getElementById('psItemsBody');
+      if (body) {
+        body.innerHTML = (data.items||[]).length
+          ? (data.items||[]).map((it) => {
+              const u = it.unit === 'kg' ? 'kg' : (it.unit === 'gr' || it.unit === 'g' ? 'g' : (it.unit||'pza'));
+              const qty = it.unit === 'kg' ? num(it.quantity, 3) : (u === 'g' ? Math.round(it.quantity*1000) : num(it.quantity, 3));
+              const qtyShow = u === 'g' ? Math.round(it.quantity*1000) : (it.unit === 'kg' ? num(it.quantity,3) : num(it.quantity,3));
+              const unitShow = u === 'g' ? 'g' : (it.unit === 'kg' ? 'kg' : (it.unit||'pza'));
+              return `<tr>
+                <td>${escHtml(it.product_name)}</td>
+                <td>${String(it.created_at).replace('T',' ').slice(0,16)}</td>
+                <td><span class="badge badge-ok">${escHtml(it.payment_method)}</span></td>
+                <td class="num">${qtyShow} ${unitShow}</td>
+                <td class="num"><b>${moneyMX(it.subtotal)}</b></td>
+                <td><b>#${String(it.ticket_no||it.sale_id).padStart(6,'0')}</b></td>
+              </tr>`;
+            }).join('')
+          : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px;">Sin ventas individuales.</td></tr>`;
+      }
+      const pag = $('psPagination');
+      if (!pag) return;
+      const totalPages = Math.max(1, Math.ceil((data.total||0)/PS_PAGE_SIZE));
+      pag.innerHTML = '';
+      if (totalPages>1) {
+        const mk=(l,p,dn)=>{const b=document.createElement('button');b.className=`btn btn-sm ${p===psPage?'':'btn-outline'}`;b.textContent=l;b.disabled=dn;b.addEventListener('click',()=>{psPage=p;loadPSList();});pag.appendChild(b);};
+        mk('« Ant',psPage-1,psPage===1);
+        mk(`Pág ${psPage}/${totalPages}`,psPage,true);
+        mk('Sig »',psPage+1,psPage===totalPages);
+      }
+      return;
+    }
+
+    let data;
+    if (psMode === 'day') {
+      data = await api.sales.list({ date: psDay, search: psTicketSearch, product_search: psProductSearch, page: psPage, pageSize: PS_PAGE_SIZE });
+    } else if (psMode === 'week') {
+      const d = new Date(psDay + 'T00:00:00');
+      const dow = d.getDay() || 7;
+      const mon = new Date(d);
+      mon.setDate(d.getDate() - (dow - 1));
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      data = await api.sales.list({ start_date: mon.toISOString().slice(0,10), end_date: sun.toISOString().slice(0,10), search: psTicketSearch, product_search: psProductSearch, page: psPage, pageSize: PS_PAGE_SIZE });
+    } else if (psMode === 'month') {
+      const d = new Date(psDay + 'T00:00:00');
+      const s = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+      const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+      const e = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+      data = await api.sales.list({ start_date: s, end_date: e, search: psTicketSearch, product_search: psProductSearch, page: psPage, pageSize: PS_PAGE_SIZE });
+    } else if (psMode === 'range') {
+      data = await api.sales.list({ start_date: psStart, end_date: psEnd, search: psTicketSearch, product_search: psProductSearch, page: psPage, pageSize: PS_PAGE_SIZE });
+    } else {
+      data = await api.sales.list({ date: psDay, search: psTicketSearch, product_search: psProductSearch, page: psPage, pageSize: PS_PAGE_SIZE });
+    }
     $('psResult').classList.remove('hidden');
     $('psEmpty').classList.add('hidden');
+    let total = 0;
+    for (const s of (data.sales||[])) total += Number(s.total_amount||0);
     $('psSummary').innerHTML = `
-      <div class="ps-stat"><div class="label">Tickets</div><div class="value">${r.summary.tickets}</div></div>
-      <div class="ps-stat"><div class="label">Artículos vendidos</div><div class="value">${num(r.summary.articles, 2)}</div></div>
-      <div class="ps-stat"><div class="label">Ingresos</div><div class="value">${moneyMX(r.summary.total)}</div></div>
-      <div class="ps-stat"><div class="label">Compras (entradas)</div><div class="value">${moneyMX(r.summary.cost || 0)}</div></div>
-      <div class="ps-stat"><div class="label">Utilidad</div><div class="value ${(r.summary.profit || 0) < 0 ? 'err' : ''}">${moneyMX(r.summary.profit || 0)}</div></div>`;
+      <div class="ps-stat"><div class="label">Tickets</div><div class="value">${data.total||0}</div></div>
+      <div class="ps-stat"><div class="label">Total</div><div class="value">${moneyMX(total)}</div></div>`;
     const body = $('psBody');
-    body.innerHTML = r.sales.length
-      ? r.sales.map((s) => `
+    body.innerHTML = (data.sales||[]).length
+      ? (data.sales||[]).map((s) => `
         <tr>
-          <td><b>#${String(s.ticket_no || s.id).padStart(6, '0')}</b></td>
-          <td>${s.time}</td>
+          <td><b>#${String(s.ticket_no||s.id).padStart(6,'0')}</b></td>
+          <td>${String(s.created_at).replace('T',' ').slice(0,16)}</td>
           <td><span class="badge badge-ok">${escHtml(s.payment_method)}</span></td>
-          <td>${fmtArticles(s.items)}</td>
+          <td>${s.items_count||0} artículo(s)</td>
           <td class="num"><b>${moneyMX(s.total_amount)}</b></td>
         </tr>`).join('')
-      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px;">Sin ventas el ${psDay}.</td></tr>`;
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px;">Sin ventas.</td></tr>`;
+    const pag = $('psPagination');
+    if (!pag) return;
+    const totalPages = Math.max(1, Math.ceil((data.total||0)/PS_PAGE_SIZE));
+    pag.innerHTML = '';
+    if (totalPages>1) {
+      const mk=(l,p,dn)=>{const b=document.createElement('button');b.className=`btn btn-sm ${p===psPage?'':'btn-outline'}`;b.textContent=l;b.disabled=dn;b.addEventListener('click',()=>{psPage=p;loadPSList();});pag.appendChild(b);};
+      mk('« Ant',psPage-1,psPage===1);
+      mk(`Pág ${psPage}/${totalPages}`,psPage,true);
+      mk('Sig »',psPage+1,psPage===totalPages);
+    }
+  } catch (e) { toast(e.message,'error'); }
 }
 
-loadDaySales();
+loadPSList();
 psCalendar.refreshMarks();
 
 /* ---------------- Entradas y Salidas de stock ---------------- */

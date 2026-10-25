@@ -164,14 +164,33 @@
               <span id="psCalendar"></span>
               <button class="btn btn-sm btn-success" id="psGo">Ver</button>
             </div>
-            <div id="psResult" class="hidden">
+            <div class="sales-filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+              <input type="search" id="psProductSearch" placeholder="Buscar producto por nombre o código de barras" autocomplete="off" style="flex:1;min-width:200px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;">
+              <div class="seg" style="margin:0;">
+                <button class="btn btn-sm seg-btn active" data-ps-view="ticket">Ventas por ticket</button>
+                <button class="btn btn-sm seg-btn" data-ps-view="items">Ventas individuales</button>
+              </div>
+              <div class="seg" style="margin:0;">
+                <button class="btn btn-sm seg-btn active" data-ps-mode="day">Día</button>
+                <button class="btn btn-sm seg-btn" data-ps-mode="week">Semana</button>
+                <button class="btn btn-sm seg-btn" data-ps-mode="month">Mes</button>
+                <button class="btn btn-sm seg-btn" data-ps-mode="range">Rango</button>
+              </div>
+              <div id="psRangeRow" style="display:none;gap:6px;align-items:center;">
+                <input type="date" id="psStartDate" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;">
+                <span>a</span>
+                <input type="date" id="psEndDate" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;">
+                <button class="btn btn-sm" id="psApplyRange">Aplicar</button>
+              </div>
+            </div>
+            <div id="psResult">
               <div class="ps-summary" id="psSummary"></div>
-              <div class="table-wrap mt">
+              <div class="table-wrap mt" id="psTableTicket">
                 <table>
                   <thead>
                     <tr>
                       <th># Ticket</th>
-                      <th>Hora</th>
+                      <th>Fecha/Hora</th>
                       <th>Método</th>
                       <th>Artículos</th>
                       <th class="num">Total</th>
@@ -180,8 +199,24 @@
                   <tbody id="psBody"></tbody>
                 </table>
               </div>
+              <div class="table-wrap mt" id="psTableItems" style="display:none;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Fecha/Hora</th>
+                      <th>Método</th>
+                      <th class="num">Cantidad</th>
+                      <th class="num">Pagado</th>
+                      <th># Ticket</th>
+                    </tr>
+                  </thead>
+                  <tbody id="psItemsBody"></tbody>
+                </table>
+              </div>
+              <div class="pagination" id="psPagination"></div>
             </div>
-            <div id="psEmpty" class="muted" style="text-align:center;padding:24px;">Selecciona un día en el calendario para ver las ventas.</div>
+            <div id="psEmpty" class="muted" style="text-align:center;padding:24px;">Selecciona un día en el calendario o usa los filtros.</div>
           </div>
         </div>
       </div>

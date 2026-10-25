@@ -177,8 +177,9 @@ function renderCart() {
     list.innerHTML = `<div class="cart-empty"><div class="big">🛒</div>
       Escanea un código, busca o toca un producto del catálogo.</div>`;
   }
-  for (const { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes } of cart.values()) {
-    const entry = { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes };
+  for (const entry of cart.values()) {
+    const { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes, mayoreo } = entry;
+    entry.mayoreo = mayoreo === true || mayoreo === 1;
     const subtotal = entrySubtotal(entry);
     const isKg = product.unit === 'kg' && displayUnit === 'gr';
     const item = document.createElement('div');
@@ -186,22 +187,25 @@ function renderCart() {
     if (isKg) {
       const grams = Math.round(quantity * 1000);
       const pesosVal = pesos != null ? pesos : Math.round((quantity * entryPrice(entry)) * 100) / 100;
+      const hasBulkPrice = Number(product.price_500g) > 0;
+      const bulkActive = entry.mayoreo && hasBulkPrice;
       item.innerHTML = `
         <div class="ci-top">
           <div class="ci-name">${product.name}</div>
-          <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar">✕</button>
+          <button class="ci-rm rm-btn" data-id="${product.id}" title="Quitar">×</button>
         </div>
-        <div class="ci-meta">${money(entryPrice(entry))}/kg${isBulk(entry) ? ` · <span class="bulk-tag">precio 500 g+</span>` : ''} · Stock: ${product.stock} kg</div>
+        <div class="ci-meta">${money(entryPrice(entry))}/kg${(isBulk(entry) || bulkActive) ? ` · <span class="bulk-tag">${bulkActive ? 'mayoreo' : 'precio 500 g+'}</span>` : ''} · Stock: ${product.stock} kg</div>
 <div class="ci-controls">
   <div class="ci-row">
     <span class="ci-prefix">$</span>
     <input type="number" class="ci-pesos" data-id="${product.id}" value="${pesosVal}" min="0" step="1" inputmode="decimal">
     <span class="ci-arrow">→</span>
-    <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">−</button>
+    <button class="qty-btn qty-minus" data-id="${product.id}" title="Disminuir">-</button>
     <input type="number" class="cart-qty" value="${grams}" min="0" step="10" data-id="${product.id}" title="Gramos">
     <span class="ci-unit">g</span>
     <button class="qty-btn qty-plus" data-id="${product.id}" title="Aumentar">+</button>
   </div>
+  ${hasBulkPrice ? `<label class="wholesale-toggle"><input type="checkbox" class="wholesale-check" data-id="${product.id}" ${bulkActive ? 'checked' : ''}> Mayoreo (precio por kg a partir de 500 g)</label>` : ''}
   <button type="button" class="btn-100g" data-id="${product.id}" title="Cambiar a 100 gramos">Cambiar a 100g</button>
 </div>
         <div class="ci-sub">${money(subtotal)}</div>`;
@@ -319,7 +323,7 @@ function entryPrice(entry) {
     const b = boxInfo(entry.product);
     if (b) return Math.round((b.price / b.pieces) * 1000) / 1000;
   }
-  return priceForQty(entry.product, entry.quantity);
+  return priceForQty(entry.product, entry.quantity, entry);
 }
 
 function boxInfo(product) {
@@ -330,14 +334,23 @@ function boxInfo(product) {
   return { pieces, price };
 }
 
-function priceForQty(product, qty) {
-  if (product.unit === 'kg' && qty >= 0.5 && Number(product.price_500g) > 0) {
+function priceForQty(product, qty, entry = null) {
+  const mayoreo = entry && (entry.mayoreo === true || entry.mayoreo === 1);
+  if (product.unit === 'kg' && Number(product.price_500g) > 0 && (mayoreo || qty >= 0.5)) {
+    return Number(product.price_500g);
+  }
+  if (product.unit === 'kg' && qty >= 0.5 && Number(product.price_500g) > 0 && !mayoreo) {
     return Number(product.price_500g);
   }
   return product.selling_price;
 }
 
-const isBulk = (entry) => entry.product.unit === 'kg' && entry.quantity >= 0.5 && Number(entry.product.price_500g) > 0;
+const isBulk = (entry) => {
+  if (!entry || entry.product.unit !== 'kg') return false;
+  const mayoreo = entry.mayoreo === true || entry.mayoreo === 1;
+  if (mayoreo && Number(entry.product.price_500g) > 0 && entry.quantity >= 0.5) return true;
+  return entry.quantity >= 0.5 && Number(entry.product.price_500g) > 0;
+};
 
 function syncBoxCount(entry) {
   if (!entry || entry.boxes == null) return;
@@ -345,11 +358,14 @@ function syncBoxCount(entry) {
   if (b) entry.boxes = Math.max(1, Math.round((entry.quantity / b.pieces) * 1000) / 1000);
 }
 
-function qtyForPesos(product, amt, existingQty = 0) {
+function qtyForPesos(product, amt, existingQty = 0, mayoreo = false) {
   if (product.unit !== 'kg') return null;
   const price = Number(product.selling_price) || 1;
   let qty = existingQty + amt / price;
-  if (qty >= 0.5 && Number(product.price_500g) > 0) {
+  if ((mayoreo || qty >= 0.5) && Number(product.price_500g) > 0) {
+    const bulk = Number(product.price_500g) || price;
+    qty = existingQty + amt / bulk;
+  } else if (qty >= 0.5 && Number(product.price_500g) > 0 && !mayoreo) {
     const bulk = Number(product.price_500g) || price;
     qty = existingQty + amt / bulk;
   }
@@ -360,16 +376,19 @@ function qtyForPesos(product, amt, existingQty = 0) {
 function addKgByPesos(product, amt) {
   const existing = cart.get(product.id);
   const prevQty = existing ? existing.quantity : 0;
+  const mayoreo = existing ? (existing.mayoreo === true || existing.mayoreo === 1) : false;
   const prevPesos = existing && existing.pesos != null
     ? existing.pesos
-    : Math.round((prevQty * entryPrice({ product, quantity: prevQty, displayUnit: 'gr' })) * 100) / 100;
+    : Math.round((prevQty * entryPrice({ product, quantity: prevQty, displayUnit: 'gr', mayoreo })) * 100) / 100;
+  const newQty = Math.round((prevQty + qtyForPesos(product, amt, prevQty, mayoreo)) * 1000) / 1000;
   const entry = {
     product,
-    quantity: Math.round((prevQty + qtyForPesos(product, amt, prevQty)) * 1000) / 1000,
+    quantity: newQty,
     displayUnit: 'gr',
-    unitPrice: entryPrice({ product, quantity: prevQty + qtyForPesos(product, amt, prevQty), displayUnit: 'gr' }),
+    unitPrice: entryPrice({ product, quantity: newQty, displayUnit: 'gr', mayoreo }),
     fixedPrice: undefined,
     pesos: Math.round((prevPesos + amt) * 100) / 100,
+    mayoreo,
   };
   cart.set(product.id, entry);
   renderCart();
@@ -444,16 +463,18 @@ async function charge() {
   chargeBtn.disabled = true;
   chargeBtn.textContent = 'Procesando…';
   try {
-    const items = [...cart.values()].map(({ product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes }) => {
-      const entry = { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes };
-      const effPrice = entryPrice(entry);
+    const items = [...cart.values()].map((entry) => {
+      const { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes, mayoreo } = entry;
+      const e = { product, quantity, displayUnit, unitPrice, fixedPrice, pesos, boxes, mayoreo };
+      const effPrice = entryPrice(e);
       return {
         product_id: product.id,
         quantity,
         unit_price: effPrice,
-        line_price: entrySubtotal(entry),
+        line_price: entrySubtotal(e),
         sale_mode: 'kg',
         sale_price: effPrice,
+        mayoreo: mayoreo === true || mayoreo === 1,
       };
     });
     const change = payment === 'efectivo' ? Math.round((paid - total) * 100) / 100 : 0;
@@ -570,7 +591,7 @@ $('cartList').addEventListener('click', (e) => {
     const inc = entry.boxes != null ? (boxInfo(entry.product)?.pieces || 1) : cartStep(entry);
     const nv = Math.round((entryDisplay(entry) + inc) * 1000) / 1000;
     if (nv > entry.product.stock && entry.product.unit !== 'kg' && !hasRecipe(entry.product)) {
-      setAlert(`Stock insuficiente de "${entry.product.name}". Máximo: ${entry.product.stock}`);
+      setAlert(`Stock insuficiente de "${entry.product.name}". Mǭximo: ${entry.product.stock}`);
       return;
     }
     entry.fixedPrice = undefined;
@@ -579,6 +600,20 @@ $('cartList').addEventListener('click', (e) => {
     syncBoxCount(entry);
   }
   renderCart();
+});
+
+$('cartList').addEventListener('change', (e) => {
+  const chk = e.target.closest('.wholesale-check');
+  if (chk) {
+    const id = Number(chk.dataset.id);
+    const entry = cart.get(id);
+    if (!entry) return;
+    entry.mayoreo = chk.checked;
+    entry.pesos = undefined;
+    entry.fixedPrice = undefined;
+    renderCart();
+    return;
+  }
 });
 
 $('cartList').addEventListener('change', (e) => {
@@ -610,9 +645,10 @@ $('cartList').addEventListener('input', (e) => {
   const id = Number(pesosInput.dataset.id);
   const entry = cart.get(id);
   if (!entry || entry.product.unit !== 'kg') return;
+  const mayoreo = entry.mayoreo === true || entry.mayoreo === 1;
   const amt = Math.round((parseFloat(pesosInput.value) || 0) * 2) / 2;
   if (amt <= 0) return;
-  entry.quantity = qtyForPesos(entry.product, amt, 0);
+  entry.quantity = qtyForPesos(entry.product, amt, 0, mayoreo);
   entry.pesos = amt;
   entry.fixedPrice = undefined;
   const gramsEl = pesosInput.closest('.ci-controls').querySelector('.cart-qty');

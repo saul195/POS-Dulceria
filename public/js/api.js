@@ -83,6 +83,11 @@ const api = {
       if (end) qs.set('end', end);
       return api.get(`/api/reports/sales-days?${qs}`);
     },
+    salesItems: (params) => {
+      const qs = new URLSearchParams();
+      Object.entries(params || {}).forEach(([k, v]) => { if (v !== '' && v != null) qs.set(k, v); });
+      return api.get(`/api/reports/sales-items?${qs}`);
+    },
   },
   stock: {
     entry: (b) => api.post('/api/stock/entry', b),

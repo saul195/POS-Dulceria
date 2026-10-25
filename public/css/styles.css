@@ -706,6 +706,18 @@ tfoot tr.turns-total td { border-bottom: none; }
 }
 .btn-100g:hover { background: var(--accent-light); }
 
+.wholesale-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 4px;
+  cursor: pointer;
+}
+.wholesale-toggle input { cursor: pointer; }
+
 .btn-box {
   align-self: flex-start;
   padding: 3px 8px;

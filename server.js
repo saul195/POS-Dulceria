@@ -297,23 +297,35 @@ app.post('/api/products/delete-all', (req, res) => {
 /* ============================ VENTAS ============================ */
 
 app.get('/api/sales', (req, res) => {
-  const { date, search, page = 1, pageSize = 20 } = req.query;
+  const { date, start_date, end_date, search, product_id, product_search, page = 1, pageSize = 20 } = req.query;
   const where = [];
   const params = [];
   if (date) {
     where.push("date(s.created_at) = ?");
     params.push(String(date).slice(0, 10));
+  } else if (start_date && end_date) {
+    where.push("date(s.created_at) BETWEEN ? AND ?");
+    params.push(String(start_date).slice(0, 10), String(end_date).slice(0, 10));
   }
   if (search && String(search).trim()) {
     where.push("CAST(s.ticket_no AS TEXT) LIKE ?");
     params.push(`%${String(search).trim()}%`);
   }
+  if (product_id) {
+    where.push("EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = s.id AND si.product_id = ?)");
+    params.push(Number(product_id));
+  }
+  if (product_search && String(product_search).trim()) {
+    const q = `%${String(product_search).trim().toLowerCase()}%`;
+    where.push("EXISTS (SELECT 1 FROM sale_items si LEFT JOIN products p2 ON p2.id = si.product_id WHERE si.sale_id = s.id AND (LOWER(COALESCE(si.product_name,'')) LIKE ? OR LOWER(COALESCE(p2.name,'')) LIKE ? OR LOWER(COALESCE(p2.barcode,'')) LIKE ?))");
+    params.push(q, q, q);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const count = db.prepare(`SELECT COUNT(*) AS total FROM sales s ${whereSql}`).get(...params).total;
+  const count = db.prepare(`SELECT COUNT(DISTINCT s.id) AS total FROM sales s ${whereSql}`).get(...params).total;
   const pageNum = Math.max(1, Number(page) || 1);
   const size = Math.min(200, Math.max(1, Number(pageSize) || 20));
   const rows = db.prepare(
-    `SELECT s.*, cs.cashier_name,
+    `SELECT DISTINCT s.*, cs.cashier_name,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS items_count
      FROM sales s LEFT JOIN cash_sessions cs ON cs.id = s.cash_session_id
      ${whereSql} ORDER BY s.id DESC LIMIT ? OFFSET ?`
@@ -611,6 +623,54 @@ app.get('/api/reports/sales-days', (req, res) => {
   });
 });
 
+app.get('/api/reports/sales-items', (req, res) => {
+  const { date, start_date, end_date, search = '', product_search = '', page = 1, pageSize = 30 } = req.query;
+  const where = [];
+  const params = [];
+  if (date) {
+    where.push("date(s.created_at) = ?");
+    params.push(String(date).slice(0, 10));
+  } else if (start_date && end_date) {
+    where.push("date(s.created_at) BETWEEN ? AND ?");
+    params.push(String(start_date).slice(0, 10), String(end_date).slice(0, 10));
+  }
+  if (search && String(search).trim()) {
+    where.push("CAST(s.ticket_no AS TEXT) LIKE ?");
+    params.push(`%${String(search).trim()}%`);
+  }
+  if (product_search && String(product_search).trim()) {
+    const q = `%${String(product_search).trim().toLowerCase()}%`;
+    where.push("(LOWER(COALESCE(si.product_name,'')) LIKE ? OR LOWER(COALESCE(p.name,'')) LIKE ? OR LOWER(COALESCE(p.barcode,'')) LIKE ?)");
+    params.push(q, q, q);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const count = db.prepare(
+    `SELECT COUNT(*) AS total FROM sale_items si JOIN sales s ON s.id = si.sale_id LEFT JOIN products p ON p.id = si.product_id ${whereSql}`
+  ).get(...params).total;
+  const pageNum = Math.max(1, Number(page) || 1);
+  const size = Math.min(200, Math.max(1, Number(pageSize) || 30));
+  const rows = db.prepare(
+    `SELECT si.id AS item_id, si.sale_id, si.product_id, si.product_name, si.quantity, si.subtotal, si.unit_price, si.sale_mode,
+            s.ticket_no, s.created_at, s.payment_method, s.total_amount AS sale_total,
+            p.name AS current_name, p.unit, p.barcode
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id LEFT JOIN products p ON p.id = si.product_id
+     ${whereSql} ORDER BY s.id DESC, si.id ASC LIMIT ? OFFSET ?`
+  ).all(...params, size, (pageNum - 1) * size);
+  res.json({
+    items: rows.map((r) => ({
+      ...r,
+      product_name: r.product_name || r.current_name || 'Producto',
+      unit: r.unit || '',
+      quantity: round3(Number(r.quantity) || 0),
+      subtotal: round2(Number(r.subtotal) || 0),
+      unit_price: round2(Number(r.unit_price) || 0),
+    })),
+    total: count,
+    page: pageNum,
+    pageSize: size,
+  });
+});
+
 app.get('/api/reports/surtidos', (req, res) => {
   const product_id = Number(req.query.product_id);
   if (!product_id) return res.status(400).json({ error: 'Falta el producto' });
@@ -765,12 +825,14 @@ app.post('/api/sales', (req, res) => {
           }
         }
 
-        const bulkUnit = p.unit === 'kg' && qty >= 0.5 && p.price_500g != null && Number(p.price_500g) > 0;
-        const unitPrice = bulkUnit ? round2(Number(p.price_500g)) : round2(Number(it.unit_price) || p.selling_price);
+        const mayoreo = it.mayoreo === true || it.mayoreo === 1 || it.wholesale === true || it.wholesale === 1;
+        const bulkUnit = p.unit === 'kg' && (mayoreo ? qty >= 0.5 : qty >= 0.5) && p.price_500g != null && Number(p.price_500g) > 0;
+        const useBulk = bulkUnit || (mayoreo && p.unit === 'kg' && p.price_500g != null && Number(p.price_500g) > 0 && qty >= 0.5);
+        const unitPrice = useBulk ? round2(Number(p.price_500g)) : round2(Number(it.unit_price) || p.selling_price);
         const saleMode = 'kg';
         const salePrice = unitPrice;
         const linePrice = it.line_price != null && Number(it.line_price) > 0 ? round2(Number(it.line_price)) : null;
-        const subtotal = bulkUnit ? round2(unitPrice * qty) : (linePrice != null ? linePrice : round2(unitPrice * qty));
+        const subtotal = useBulk ? round2(unitPrice * qty) : (linePrice != null ? linePrice : round2(unitPrice * qty));
 
         if (ingredients.length > 0) {
           for (const ing of ingredients) {

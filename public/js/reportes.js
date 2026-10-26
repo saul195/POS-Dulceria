@@ -425,7 +425,7 @@ async function loadPSList() {
         const d = new Date(psDay + 'T00:00:00');
         const dow = d.getDay() || 7;
         const mon = new Date(d); mon.setDate(d.getDate()-(dow-1));
-        const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+        const sun = new Date(mon); sun.setTag? null : sun.setDate(mon.getDate()+6);
         params.start_date = mon.toISOString().slice(0,10); params.end_date = sun.toISOString().slice(0,10);
       } else if (psMode === 'month') {
         const d = new Date(psDay + 'T00:00:00');
@@ -439,10 +439,15 @@ async function loadPSList() {
       const data = await api.reports.salesItems(params);
       $('psResult').classList.remove('hidden');
       $('psEmpty').classList.add('hidden');
-      let totalPagado = 0;
-      for (const it of (data.items||[])) totalPagado += Number(it.subtotal||0);
+      let totalPagado = Number(data.summary?.total_amount || 0);
+      if ((!totalPagado && !data.summary?.total_amount) && data.items?.length) {
+        totalPagado = 0;
+        for (const it of (data.items||[])) totalPagado += Number(it.subtotal||0);
+      }
+      const totalQty = data.summary?.total_qty != null ? data.summary.total_qty : null;
       $('psSummary').innerHTML = `
         <div class="ps-stat"><div class="label">Conceptos</div><div class="value">${data.total||0}</div></div>
+        ${psProductSearch ? `<div class="ps-stat"><div class="label">Cantidad vendida</div><div class="value">${totalQty != null ? num(totalQty, 3) : '-'}</div></div>` : ''}
         <div class="ps-stat"><div class="label">Total pagado</div><div class="value">${moneyMX(totalPagado)}</div></div>`;
       const body = document.getElementById('psItemsBody');
       if (body) {
@@ -504,7 +509,8 @@ async function loadPSList() {
     for (const s of (data.sales||[])) total += Number(s.total_amount||0);
     $('psSummary').innerHTML = `
       <div class="ps-stat"><div class="label">Tickets</div><div class="value">${data.total||0}</div></div>
-      <div class="ps-stat"><div class="label">Total</div><div class="value">${moneyMX(total)}</div></div>`;
+      ${psProductSearch ? `<div class="ps-stat"><div class="label">Cantidad vendida</div><div class="value">${data.summary?.total_qty != null ? num(data.summary.total_qty, 3) : '-'}</div></div>
+      <div class="ps-stat"><div class="label">Total vendido</div><div class="value">${data.summary?.total_amount != null ? moneyMX(data.summary.total_amount) : '-'}</div></div>` : `<div class="ps-stat"><div class="label">Total</div><div class="value">${moneyMX(total)}</div></div>`}`;
     const body = $('psBody');
     body.innerHTML = (data.sales||[]).length
       ? (data.sales||[]).map((s) => `

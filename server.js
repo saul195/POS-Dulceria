@@ -330,7 +330,42 @@ app.get('/api/sales', (req, res) => {
      FROM sales s LEFT JOIN cash_sessions cs ON cs.id = s.cash_session_id
      ${whereSql} ORDER BY s.id DESC LIMIT ? OFFSET ?`
   ).all(...params, size, (pageNum - 1) * size);
-  res.json({ sales: rows, total: count, page: pageNum, pageSize: size });
+
+  let summary = null;
+  if ((product_search && String(product_search).trim()) || product_id) {
+    const swhere = [];
+    const sparams = [];
+    if (date) {
+      swhere.push("date(s.created_at) = ?");
+      sparams.push(String(date).slice(0, 10));
+    } else if (start_date && end_date) {
+      swhere.push("date(s.created_at) BETWEEN ? AND ?");
+      sparams.push(String(start_date).slice(0, 10), String(end_date).slice(0, 10));
+    }
+    if (product_id) {
+      swhere.push("si.product_id = ?");
+      sparams.push(Number(product_id));
+    }
+    if (product_search && String(product_search).trim()) {
+      const q = `%${String(product_search).trim().toLowerCase()}%`;
+      swhere.push("(LOWER(COALESCE(si.product_name,'')) LIKE ? OR LOWER(COALESCE(p2.name,'')) LIKE ? OR LOWER(COALESCE(p2.barcode,'')) LIKE ?)");
+      sparams.push(q, q, q);
+    }
+    const sw = swhere.length ? `WHERE ${swhere.join(' AND ')}` : '';
+    const r = db.prepare(
+      `SELECT COALESCE(SUM(si.quantity), 0) AS qty, COALESCE(SUM(si.subtotal), 0) AS total
+       FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+       LEFT JOIN products p2 ON p2.id = si.product_id
+       ${sw}`
+    ).get(...sparams);
+    summary = {
+      total_qty: round3(Number(r.qty) || 0),
+      total_amount: round2(Number(r.total) || 0),
+    };
+  }
+
+  res.json({ sales: rows, total: count, page: pageNum, pageSize: size, summary });
 });
 
 app.get('/api/sales/:id', (req, res) => {
@@ -647,6 +682,10 @@ app.get('/api/reports/sales-items', (req, res) => {
   const count = db.prepare(
     `SELECT COUNT(*) AS total FROM sale_items si JOIN sales s ON s.id = si.sale_id LEFT JOIN products p ON p.id = si.product_id ${whereSql}`
   ).get(...params).total;
+  const summary = db.prepare(
+    `SELECT COALESCE(SUM(si.quantity), 0) AS total_qty, COALESCE(SUM(si.subtotal), 0) AS total_amount
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id LEFT JOIN products p ON p.id = si.product_id ${whereSql}`
+  ).get(...params);
   const pageNum = Math.max(1, Number(page) || 1);
   const size = Math.min(200, Math.max(1, Number(pageSize) || 30));
   const rows = db.prepare(
@@ -668,6 +707,10 @@ app.get('/api/reports/sales-items', (req, res) => {
     total: count,
     page: pageNum,
     pageSize: size,
+    summary: {
+      total_qty: round3(Number(summary.total_qty) || 0),
+      total_amount: round2(Number(summary.total_amount) || 0),
+    },
   });
 });
 

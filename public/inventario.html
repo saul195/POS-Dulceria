@@ -116,10 +116,12 @@
           <input type="number" id="fRecipeGrams2" step="1" min="0">
           <div class="hint">Ej. combinado = 60 g de vainilla + 60 g de chocolate. Si es vacío, solo se usa el 1er bote.</div>
         </div>
-        <div class="form-field full recipe-helado-wrap hidden">
+        <div class="form-field full container-wrap hidden">
           <label>Contenedor que se descuenta al vender <span class="muted">(opcional)</span></label>
-          <select id="fContainer"></select>
-          <div class="hint">Ej. el barquillo o la canasta (producto con su propio stock): por cada pieza vendida se descuenta 1 de ese producto.</div>
+          <input type="text" id="fContainerSearch" placeholder="Busca un producto por nombre o código…" autocomplete="off">
+          <input type="hidden" id="fContainer">
+          <div class="suggest-list" id="containerSuggestions"></div>
+          <div class="hint">Ej. el vaso, la bolsa o el barquillo (producto con su propio stock): se descuenta 1 pieza entera por unidad vendida. Si el producto se vende por peso, se redondea hacia arriba.</div>
         </div>
         <div class="form-field full">
           <label>Precio de venta ($)</label>

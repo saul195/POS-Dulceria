@@ -406,7 +406,7 @@ app.delete('/api/sales/:id', (req, res) => {
       } else {
         restock.run(it.quantity, p.id);
       }
-      if (p.container_product_id) restock.run(it.quantity, p.container_product_id);
+      if (p.container_product_id) restock.run(Math.ceil(it.quantity), p.container_product_id);
     }
     db.prepare('DELETE FROM stock_movements WHERE reason LIKE ? AND date(created_at) = ?')
       .run(`%(ticket #${sale.ticket_no})%`, String(sale.created_at).slice(0, 10));
@@ -860,11 +860,12 @@ app.post('/api/sales', (req, res) => {
           throw new Error(`Stock insuficiente de "${p.name}". Disponible: ${p.stock} ${p.unit}`);
         }
 
+        const containerQty = Math.ceil(qty);
         if (p.container_product_id) {
           const cont = getProd.get(p.container_product_id);
           if (cont && cont.id === p.id) throw new Error(`El contenedor de "${p.name}" no puede ser el propio producto`);
-          if (cont && qty > cont.stock) {
-            throw new Error(`No alcanzan los contenedores de "${cont.name}": necesita ${qty} ${cont.unit} y solo hay ${cont.stock}`);
+          if (cont && containerQty > cont.stock) {
+            throw new Error(`No alcanzan los contenedores de "${cont.name}": necesita ${containerQty} ${cont.unit} y solo hay ${cont.stock}`);
           }
         }
 
@@ -891,8 +892,8 @@ app.post('/api/sales', (req, res) => {
         if (p.container_product_id) {
           const cont = getProd.get(p.container_product_id);
           if (cont) {
-            decStock.run(qty, cont.id);
-            insMove.run(cont.id, 'salida', qty, `Contenedor de "${p.name}" (ticket #${nextTicket})`);
+            decStock.run(containerQty, cont.id);
+            insMove.run(cont.id, 'salida', containerQty, `Contenedor de "${p.name}" (ticket #${nextTicket})`);
           }
         }
 

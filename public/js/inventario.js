@@ -9,6 +9,7 @@ let state = {
   totalPages: 1,
   categories: [],
   botes: [],
+  allContainers: [],
 };
 
 /* ---------------- Carga de listas ---------------- */
@@ -53,22 +54,9 @@ async function loadBotes() {
         sel.appendChild(opt);
       }
     }
-    const contSel = $('fContainer');
-    if (contSel) {
-      contSel.innerHTML = '';
-      const o = document.createElement('option');
-      o.value = '';
-      o.textContent = '— Sin contenedor —';
-      contSel.appendChild(o);
-      const containers = all.filter((p) => !p.is_bote);
-      state.containerNames = Object.fromEntries(containers.map((p) => [p.id, p.name]));
-      for (const c of containers) {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = `${c.name} (${stockNum(c.stock, c.unit)} ${c.unit})`;
-        contSel.appendChild(opt);
-      }
-    }
+    const containers = all.filter((p) => !p.is_bote);
+    state.containerNames = Object.fromEntries(containers.map((p) => [p.id, p.name]));
+    state.allContainers = containers;
   } catch (e) { /* el selector de botes quedará vacío */ }
 }
 
@@ -77,7 +65,42 @@ function updateRecipeVisibility() {
   const isBote = $('fIsBote').checked;
   document.querySelectorAll('.recipe-wrap').forEach((el) => el.classList.toggle('hidden', !isHelados));
   document.querySelectorAll('.recipe-helado-wrap').forEach((el) => el.classList.toggle('hidden', !(isHelados && !isBote)));
+  document.querySelectorAll('.container-wrap').forEach((el) => el.classList.toggle('hidden', isBote));
 }
+
+function renderContainerSuggestions() {
+  const box = $('containerSuggestions');
+  const q = $('fContainerSearch').value.trim();
+  if (!q) { box.innerHTML = ''; return; }
+  const lq = q.toLowerCase();
+  const editingId = $('productModal').dataset.editingId;
+  const matches = state.allContainers
+    .filter((p) => String(p.id) !== String(editingId))
+    .filter((p) => p.name.toLowerCase().includes(lq) || (p.barcode && p.barcode.toLowerCase().includes(lq)))
+    .slice(0, 8);
+  box.innerHTML = matches.length
+    ? matches.map((p) => `
+        <button type="button" class="suggest-item" data-id="${p.id}">
+          <b>${escHtml(p.name)}</b> <span class="muted">(${stockNum(p.stock, p.unit)} ${p.unit}${p.barcode ? ' · ' + escHtml(p.barcode) : ''})</span>
+        </button>`).join('')
+    : `<div class="muted" style="padding:8px 4px;">Sin coincidencias.</div>`;
+  box.querySelectorAll('.suggest-item').forEach((b) => {
+    b.addEventListener('click', () => selectContainer(b.dataset.id));
+  });
+}
+
+function selectContainer(id) {
+  const p = state.allContainers.find((x) => String(x.id) === String(id));
+  if (!p) return;
+  $('fContainer').value = p.id;
+  $('fContainerSearch').value = p.name;
+  $('containerSuggestions').innerHTML = '';
+}
+
+function clearContainerSelection() {
+  $('fContainer').value = '';
+}
+
 
 function renderCatPills() {
   const wrap = $('catPills');
@@ -363,7 +386,10 @@ async function openProductModal(product = null) {
     $('fRecipeGrams').value = product.recipe_grams || '';
     $('fRecipeBote2').value = product.recipe_bote_id2 || '';
     $('fRecipeGrams2').value = product.recipe_grams2 || '';
-    $('fContainer').value = product.container_product_id || '';
+    const containerProduct = state.allContainers.find((c) => String(c.id) === String(product.container_product_id));
+    $('fContainer').value = containerProduct ? containerProduct.id : '';
+    $('fContainerSearch').value = containerProduct ? containerProduct.name : '';
+    $('containerSuggestions').innerHTML = '';
     $('productModal').dataset.editingId = product.id;
   } else {
     title.textContent = 'Nuevo producto';
@@ -381,6 +407,8 @@ async function openProductModal(product = null) {
     $('fRecipeBote2').value = '';
     $('fRecipeGrams2').value = '';
     $('fContainer').value = '';
+    $('fContainerSearch').value = '';
+    $('containerSuggestions').innerHTML = '';
     $('productModal').dataset.editingId = '';
   }
   updatePrice500Visibility();
@@ -403,7 +431,26 @@ function updateBoxVisibility() {
 
 $('fUnit').addEventListener('input', () => { updatePrice500Visibility(); updateBoxVisibility(); });
 $('fCategory').addEventListener('change', updateRecipeVisibility);
-$('fIsBote').addEventListener('change', updateRecipeVisibility);
+$('fIsBote').addEventListener('change', () => {
+  if ($('fIsBote').checked) {
+    $('fContainer').value = '';
+    $('fContainerSearch').value = '';
+    $('containerSuggestions').innerHTML = '';
+  }
+  updateRecipeVisibility();
+});
+$('fContainerSearch').addEventListener('input', () => {
+  clearContainerSelection();
+  renderContainerSuggestions();
+});
+$('fContainerSearch').addEventListener('focus', renderContainerSuggestions);
+$('fContainerSearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const first = $('containerSuggestions').querySelector('.suggest-item');
+    if (first) first.click();
+  }
+});
 
 async function saveProduct() {
   const modal = $('productModal');
@@ -441,7 +488,7 @@ async function saveProduct() {
   if (!body.is_bote && isHeladosCat(body.category_id) && (!body.recipe_bote_id || !(body.recipe_grams > 0))) {
     return toast('Indica el bote del que descuenta y los gramos por pieza.', 'error');
   }
-  if (!body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2 || body.container_product_id)) {
+  if (!body.is_bote && (body.recipe_bote_id || body.recipe_bote_id2)) {
     body.stock = 0;
     body.min_stock = 0;
   }
